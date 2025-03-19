@@ -4,7 +4,7 @@ import random
 
 from src.models.communication import (
     Message, Thread, Channel, Meeting,
-    CommunicationType, MessagePriority, CommunicationChannel, MeetingType
+    CommunicationType, MessagePriority, CommunicationChannel, MeetingType, MeetingStatus
 )
 from src.models.team import TeamMember, Team
 from src.models.ticket import Ticket, TicketStatus, TicketType, Sprint
@@ -13,6 +13,7 @@ from src.generators.utils import (
     weighted_choice
 )
 from src.config.sample_company import INNOVATECH_CONFIG
+from src.generators.llm_generator import LLMGenerator
 
 class CommunicationGenerator:
     def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config=INNOVATECH_CONFIG):
@@ -23,6 +24,7 @@ class CommunicationGenerator:
         self.messages: Dict[str, Message] = {}
         self.threads: Dict[str, Thread] = {}
         self.meetings: Dict[str, Meeting] = {}
+        self.llm = LLMGenerator()
         
         # Communication patterns
         self.message_frequency = {
@@ -222,24 +224,101 @@ class CommunicationGenerator:
                 member.id for member in team_members
                 if member.id not in attendees
             ]
+
+        # Generate meeting topics based on type
+        topics = self._generate_meeting_topics(meeting_type, team)
         
-        # Generate meeting
+        # Generate meeting notes and transcript
+        description = self.llm.generate_meeting_notes(
+            meeting_type=meeting_type.value,
+            attendees=[f"Member_{id}" for id in attendees],
+            topics=topics
+        )
+        
+        # Only generate transcript for completed meetings
+        transcript = None
+        if end_time < datetime.now():
+            transcript = self.llm.generate_meeting_transcript(
+                meeting_type=meeting_type.value,
+                attendees=[f"Member_{id}" for id in attendees],
+                topics=topics,
+                duration_minutes=duration_minutes
+            )
+        
         meeting = Meeting(
             id=generate_id("MTG"),
             type=meeting_type,
             title=self._generate_meeting_title(meeting_type, team.name),
-            description=self._generate_meeting_description(meeting_type),
+            description=description,
+            transcript=transcript,
             start_time=start_time,
             end_time=end_time,
             organizer_id=organizer.id,
             attendees=attendees,
             optional_attendees=optional_attendees,
             team_id=team.id,
-            recurring=meeting_type in [MeetingType.STANDUP, MeetingType.TEAM_SYNC],
-            status="completed" if end_time < datetime.now() else "scheduled"
+            recurring=meeting_type == MeetingType.STANDUP,
+            status=MeetingStatus.COMPLETED if end_time < datetime.now() else MeetingStatus.SCHEDULED
         )
         
         return meeting
+
+    def _generate_meeting_topics(self, meeting_type: MeetingType, team: Team) -> List[str]:
+        """Generate relevant topics for a meeting based on its type."""
+        base_topics = {
+            MeetingType.STANDUP: [
+                "Progress updates",
+                "Blockers and challenges",
+                "Plans for today"
+            ],
+            MeetingType.SPRINT_PLANNING: [
+                "Sprint goals and objectives",
+                "Capacity planning",
+                "Backlog refinement",
+                "Story point estimation"
+            ],
+            MeetingType.SPRINT_REVIEW: [
+                "Sprint accomplishments",
+                "Demo of completed work",
+                "Stakeholder feedback",
+                "Next sprint preview"
+            ],
+            MeetingType.SPRINT_RETRO: [
+                "What went well",
+                "Areas for improvement",
+                "Action items from last retro",
+                "Team collaboration"
+            ],
+            MeetingType.TECHNICAL_DISCUSSION: [
+                "Architecture review",
+                "Technical debt",
+                "Best practices",
+                "Tool improvements"
+            ],
+            MeetingType.TEAM_SYNC: [
+                "Project status",
+                "Upcoming milestones",
+                "Resource allocation",
+                "Cross-team dependencies"
+            ],
+            MeetingType.INCIDENT_REVIEW: [
+                "Incident timeline",
+                "Root cause analysis",
+                "Mitigation strategies",
+                "Prevention measures"
+            ]
+        }
+
+        # Get base topics for the meeting type
+        topics = base_topics.get(meeting_type, ["General discussion"])
+        
+        # Add team-specific topics
+        if team.tech_stack:
+            topics.append(f"{random.choice(team.tech_stack).value} implementation discussion")
+        if team.current_projects:
+            topics.append(f"{random.choice(team.current_projects)} project update")
+            
+        return topics
 
     def generate_sprint_meetings(self, team: Team, sprint: Sprint) -> List[Meeting]:
         """Generate all meetings for a sprint."""

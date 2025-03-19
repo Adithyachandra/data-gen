@@ -24,13 +24,19 @@ class CommunicationChannel(str, Enum):
     INCIDENTS = "incidents"
 
 class MeetingType(str, Enum):
-    STANDUP = "standup"
-    SPRINT_PLANNING = "sprint_planning"
-    SPRINT_REVIEW = "sprint_review"
-    SPRINT_RETRO = "sprint_retrospective"
-    TECHNICAL_DISCUSSION = "technical_discussion"
-    TEAM_SYNC = "team_sync"
-    INCIDENT_REVIEW = "incident_review"
+    STANDUP = "Daily Standup"
+    SPRINT_PLANNING = "Sprint Planning"
+    SPRINT_REVIEW = "Sprint Review"
+    SPRINT_RETRO = "Sprint Retrospective"
+    TECHNICAL_DISCUSSION = "Technical Discussion"
+    TEAM_SYNC = "Team Sync"
+    INCIDENT_REVIEW = "Incident Review"
+
+class MeetingStatus(str, Enum):
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 class Message(BaseModel):
     id: str = Field(..., description="Unique identifier for the message")
@@ -74,6 +80,7 @@ class Meeting(BaseModel):
     type: MeetingType = Field(..., description="Type of meeting")
     title: str = Field(..., description="Title of the meeting")
     description: str = Field(..., description="Meeting description/agenda")
+    transcript: Optional[str] = Field(None, description="Meeting transcript")
     start_time: datetime = Field(..., description="Meeting start time")
     end_time: datetime = Field(..., description="Meeting end time")
     organizer_id: str = Field(..., description="ID of the team member organizing the meeting")
@@ -84,4 +91,4 @@ class Meeting(BaseModel):
     notes: Optional[str] = Field(None, description="Meeting notes/minutes")
     action_items: List[Dict[str, str]] = Field(default_factory=list, description="List of action items")
     recurring: bool = Field(default=False, description="Whether this is a recurring meeting")
-    status: str = Field(default="scheduled", description="Meeting status (scheduled, in_progress, completed, cancelled)") 
+    status: MeetingStatus = Field(default=MeetingStatus.SCHEDULED, description="Meeting status (scheduled, in_progress, completed, cancelled)") 
