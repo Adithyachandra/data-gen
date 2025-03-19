@@ -12,6 +12,7 @@ from src.models.ticket import Ticket, Sprint, TicketStatus
 from src.models.communication import Message, Meeting
 from src.generators.utils import generate_id
 from src.config.sample_company import INNOVATECH_CONFIG
+from src.generators.llm_generator import LLMGenerator
 
 class ActivityGenerator:
     def __init__(
@@ -24,6 +25,7 @@ class ActivityGenerator:
         self.team_members = team_members
         self.teams = teams
         self.activities: Dict[str, Activity] = {}
+        self.llm = LLMGenerator()
         
         # Activity patterns
         self.activity_patterns = {
@@ -467,4 +469,28 @@ class ActivityGenerator:
         
         summary["active_users"] = len(summary["active_users"])
         
-        return summary 
+        return summary
+
+    def generate_code_review_activity(self, ticket: Ticket, reviewer_id: str) -> Activity:
+        """Generate a code review activity with realistic comments."""
+        activity_id = generate_id()
+        
+        # Simulate code snippet based on ticket type and component
+        code_snippet = f"def implement_{ticket.component.value.lower()}():\n    # Implementation\n    pass"
+        
+        comment = self.llm.generate_code_review_comment(
+            code_snippet=code_snippet,
+            context=f"Code review for {ticket.type.value} ticket related to {ticket.component.value}"
+        )
+        
+        activity = Activity(
+            id=activity_id,
+            type=ActivityType.CODE_REVIEW,
+            ticket_id=ticket.id,
+            user_id=reviewer_id,
+            timestamp=datetime.now(),
+            description=comment
+        )
+        
+        self.activities[activity_id] = activity
+        return activity 

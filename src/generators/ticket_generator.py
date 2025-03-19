@@ -13,6 +13,7 @@ from src.generators.utils import (
     weighted_choice, generate_paragraph, random_subset
 )
 from src.config.sample_company import INNOVATECH_CONFIG
+from src.generators.llm_generator import LLMGenerator
 
 class TicketGenerator:
     def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config=INNOVATECH_CONFIG):
@@ -36,6 +37,8 @@ class TicketGenerator:
         self.clone_probability = 0.1       # 10% chance of cloned tickets
         self.duplicate_probability = 0.15  # 15% chance of duplicate tickets
         self.implements_probability = 0.2  # 20% chance of implementation relationships
+
+        self.llm = LLMGenerator()
 
     def _generate_fix_versions(self) -> Dict[str, FixVersion]:
         """Generate fix versions for the project."""
@@ -89,11 +92,10 @@ class TicketGenerator:
         epic = Epic(
             id=epic_id,
             summary=f"Epic: {component.value} Enhancement Initiative",
-            description=generate_paragraph(
-                min_words=30,
-                max_words=100,
-                technical=True,
-                formal=True
+            description=self.llm.generate_ticket_description(
+                title=f"Epic: {component.value} Enhancement Initiative",
+                ticket_type="Epic",
+                component=component.value
             ),
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.HIGH,
@@ -129,10 +131,10 @@ class TicketGenerator:
         story = Story(
             id=story_id,
             summary=f"Story: Implement {component.value} Feature",
-            description=generate_paragraph(
-                min_words=20,
-                max_words=50,
-                technical=True
+            description=self.llm.generate_ticket_description(
+                title=f"Story: Implement {component.value} Feature",
+                ticket_type="Story",
+                component=component.value
             ),
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -161,10 +163,10 @@ class TicketGenerator:
         task = Task(
             id=task_id,
             summary=f"Task: Implement {component.value} Component",
-            description=generate_paragraph(
-                min_words=15,
-                max_words=40,
-                technical=True
+            description=self.llm.generate_ticket_description(
+                title=f"Task: Implement {component.value} Component",
+                ticket_type="Task",
+                component=component.value
             ),
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -193,10 +195,10 @@ class TicketGenerator:
         subtask = Subtask(
             id=subtask_id,
             summary=f"Subtask: Implement {component.value} Subcomponent",
-            description=generate_paragraph(
-                min_words=10,
-                max_words=30,
-                technical=True
+            description=self.llm.generate_ticket_description(
+                title=f"Subtask: Implement {component.value} Subcomponent",
+                ticket_type="Subtask",
+                component=component.value
             ),
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -225,10 +227,10 @@ class TicketGenerator:
         bug = Bug(
             id=bug_id,
             summary=f"Bug: {component.value} Issue",
-            description=generate_paragraph(
-                min_words=20,
-                max_words=50,
-                technical=True
+            description=self.llm.generate_ticket_description(
+                title=f"Bug: {component.value} Issue",
+                ticket_type="Bug",
+                component=component.value
             ),
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.HIGH,
