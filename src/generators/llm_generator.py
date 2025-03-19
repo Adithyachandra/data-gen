@@ -1,16 +1,16 @@
 from typing import List, Dict, Any, Optional
-import openai
-from datetime import datetime
 import os
+from openai import OpenAI
+from datetime import datetime
 import json
 
 class LLMGenerator:
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize the LLM generator with OpenAI API key."""
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")
-        openai.api_key = self.api_key
+    def __init__(self, api_key=None):
+        if api_key is None:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key is None:
+                raise ValueError("OpenAI API key must be provided either as an argument or through OPENAI_API_KEY environment variable")
+        self.client = OpenAI()
 
     def generate_ticket_description(self, title: str, ticket_type: str, component: str) -> str:
         """Generate a realistic ticket description based on the title and type."""
@@ -27,7 +27,7 @@ class LLMGenerator:
         
         Format the response in markdown."""
 
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a technical writer creating detailed software development tickets."},
@@ -49,7 +49,7 @@ class LLMGenerator:
         
         The message should sound natural and professional."""
 
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a software development team member writing a message in a team chat."},
@@ -75,7 +75,7 @@ class LLMGenerator:
         
         Format the response in markdown."""
 
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a technical team member documenting meeting notes."},
@@ -83,31 +83,6 @@ class LLMGenerator:
             ],
             temperature=0.7,
             max_tokens=500
-        )
-        
-        return response.choices[0].message.content
-
-    def generate_code_review_comment(self, code_snippet: str, context: str) -> str:
-        """Generate realistic code review comments."""
-        prompt = f"""Generate a constructive code review comment for the following code snippet:
-        ```
-        {code_snippet}
-        ```
-        Context: {context}
-        
-        The comment should be:
-        1. Constructive and professional
-        2. Specific to the code
-        3. Include both positive feedback and improvement suggestions where applicable"""
-
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an experienced software developer reviewing code."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200
         )
         
         return response.choices[0].message.content
@@ -175,7 +150,7 @@ class LLMGenerator:
            - Decision-making processes
         
         3. Time-based progression:
-           - Regular timestamps (every 1 minute)
+           - Regular timestamps (every 5-10 minutes)
            - Realistic pacing of discussions
            - Time management indicators
            - Natural breaks and transitions
@@ -200,7 +175,7 @@ class LLMGenerator:
         - Important decisions or action items highlighted
         - Links to referenced materials"""
 
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
@@ -216,6 +191,31 @@ class LLMGenerator:
             ],
             temperature=0.8,
             max_tokens=2000  # Increased token limit for more detailed transcripts
+        )
+        
+        return response.choices[0].message.content
+
+    def generate_code_review_comment(self, code_snippet: str, context: str) -> str:
+        """Generate realistic code review comments."""
+        prompt = f"""Generate a constructive code review comment for the following code snippet:
+        ```
+        {code_snippet}
+        ```
+        Context: {context}
+        
+        The comment should be:
+        1. Constructive and professional
+        2. Specific to the code
+        3. Include both positive feedback and improvement suggestions where applicable"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an experienced software developer reviewing code."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=200
         )
         
         return response.choices[0].message.content 

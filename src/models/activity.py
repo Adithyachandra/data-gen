@@ -19,6 +19,7 @@ class ActivityType(str, Enum):
     MESSAGE_SEND = "message_send"
     MENTION = "mention"
     REACTION_ADD = "reaction_add"
+    CODE_REVIEW = "code_review"
 
 class ActivityCategory(str, Enum):
     TICKET = "ticket"

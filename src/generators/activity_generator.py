@@ -475,21 +475,29 @@ class ActivityGenerator:
         """Generate a code review activity with realistic comments."""
         activity_id = generate_id()
         
+        # Get the first component from the ticket's components list
+        component = ticket.components[0] if ticket.components else "unknown"
+        
         # Simulate code snippet based on ticket type and component
-        code_snippet = f"def implement_{ticket.component.value.lower()}():\n    # Implementation\n    pass"
+        code_snippet = f"def implement_{component.lower()}():\n    # Implementation\n    pass"
         
         comment = self.llm.generate_code_review_comment(
             code_snippet=code_snippet,
-            context=f"Code review for {ticket.type.value} ticket related to {ticket.component.value}"
+            context=f"Code review for {ticket.type.value} ticket related to {component}"
         )
         
         activity = Activity(
             id=activity_id,
             type=ActivityType.CODE_REVIEW,
+            category=ActivityCategory.TICKET,
             ticket_id=ticket.id,
             user_id=reviewer_id,
             timestamp=datetime.now(),
-            description=comment
+            details={
+                "comment": comment,
+                "code_snippet": code_snippet,
+                "component": component
+            }
         )
         
         self.activities[activity_id] = activity

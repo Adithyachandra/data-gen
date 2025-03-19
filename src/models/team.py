@@ -6,6 +6,8 @@ from datetime import datetime
 class Department(str, Enum):
     ENGINEERING = "Engineering"
     PRODUCT = "Product"
+    DESIGN = "Design"
+    QA = "Quality Assurance"
     SALES = "Sales"
     MARKETING = "Marketing"
     CUSTOMER_SUPPORT = "Customer Support"
@@ -137,13 +139,20 @@ class SeniorityLevel(str, Enum):
     JUNIOR = "Junior"
     ENTRY = "Entry Level"
 
+class Seniority(str, Enum):
+    JUNIOR = "Junior"
+    MID = "Mid-level"
+    SENIOR = "Senior"
+    LEAD = "Lead"
+    PRINCIPAL = "Principal"
+
 class TeamMember(BaseModel):
     id: str = Field(..., description="Unique identifier for the team member")
     name: str = Field(..., description="Full name of the team member")
     email: str = Field(..., description="Work email address")
     department: Department = Field(..., description="Department the member belongs to")
     role: Role = Field(..., description="Current role in the company")
-    seniority: SeniorityLevel = Field(..., description="Seniority level")
+    seniority: Seniority = Field(..., description="Seniority level")
     skills: List[Skill] = Field(default_factory=list, description="Professional skills")
     join_date: datetime = Field(..., description="Date when member joined the company")
     reports_to: Optional[str] = Field(None, description="ID of the manager/lead")
@@ -152,6 +161,7 @@ class TeamMember(BaseModel):
     languages: List[str] = Field(default_factory=list, description="Languages spoken")
     office_location: Optional[str] = Field(None, description="Primary office location")
     is_remote: bool = Field(default=False, description="Whether the member works remotely")
+    team_id: str = Field(..., description="ID of the team the member belongs to")
 
 class Team(BaseModel):
     id: str = Field(..., description="Unique identifier for the team")
@@ -167,6 +177,7 @@ class Team(BaseModel):
     timezone: str = Field(default="UTC", description="Primary timezone of the team")
     is_virtual: bool = Field(default=False, description="Whether the team is fully remote")
     components: List[str] = Field(default_factory=list, description="Components owned by the team")
+    current_projects: List[str] = Field(default_factory=list, description="Current projects the team is working on")
 
 class BusinessUnit(BaseModel):
     id: str = Field(..., description="Unique identifier for the business unit")
