@@ -119,5 +119,27 @@ def test_llm_generation():
     )
     print(f"Code Review Comment:\n{activity.details['comment']}\n")
 
+    # Test email generation
+    print("\n4. Generating a sample email...")
+    email = comm_gen.generate_email(
+        sender=team.members[0],  # Sarah (manager)
+        recipients=[team.members[1], team.members[2]],  # Alex and Maria
+        subject="Sprint Planning Follow-up",
+        context="Follow up on sprint planning meeting discussing the Backend Enhancement Initiative"
+    )
+    print(f"Email Subject: {email.subject}")
+    print(f"Email Content:\n{email.content}\n")
+
+    # Test detailed meeting transcript
+    print("\n5. Generating a detailed sprint planning meeting transcript...")
+    sprint_meeting = comm_gen.generate_meeting(
+        team=team,
+        meeting_type=MeetingType.SPRINT_PLANNING
+    )
+    print(f"Meeting Title: {sprint_meeting.title}")
+    print(f"Meeting Description:\n{sprint_meeting.description}")
+    if sprint_meeting.transcript:
+        print(f"\nMeeting Transcript:\n{sprint_meeting.transcript}\n")
+
 if __name__ == "__main__":
     test_llm_generation() 

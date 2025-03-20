@@ -4,7 +4,8 @@ import random
 
 from src.models.communication import (
     Message, Thread, Channel, Meeting,
-    CommunicationType, MessagePriority, CommunicationChannel, MeetingType, MeetingStatus
+    CommunicationType, MessagePriority, CommunicationChannel, MeetingType, MeetingStatus,
+    Email, EmailPriority, EmailStatus
 )
 from src.models.team import TeamMember, Team
 from src.models.ticket import Ticket, TicketStatus, TicketType, Sprint
@@ -24,6 +25,7 @@ class CommunicationGenerator:
         self.messages: Dict[str, Message] = {}
         self.threads: Dict[str, Thread] = {}
         self.meetings: Dict[str, Meeting] = {}
+        self.emails: Dict[str, Email] = {}
         self.llm = LLMGenerator()
         
         # Communication patterns
@@ -616,3 +618,31 @@ class CommunicationGenerator:
         ]
         
         return f"{base_description}\n\nAgenda:\n- " + "\n- ".join(agenda_items) 
+
+    def generate_email(self, sender: TeamMember, recipients: List[TeamMember], subject: str, context: str) -> Email:
+        """Generate an email with realistic content."""
+        email_id = generate_id()
+        
+        # Generate email content using LLM
+        content = self.llm.generate_email_content(
+            sender_name=sender.name,
+            recipient_names=[r.name for r in recipients],
+            subject=subject,
+            context=context
+        )
+        
+        # Create the email
+        email = Email(
+            id=email_id,
+            subject=subject,
+            content=content,
+            sender_id=sender.id,
+            recipient_ids=[r.id for r in recipients],
+            timestamp=datetime.now(),
+            priority=EmailPriority.MEDIUM,
+            status=EmailStatus.SENT,
+            tags=["sprint-planning", "backend-enhancement"]
+        )
+        
+        self.emails[email_id] = email
+        return email 

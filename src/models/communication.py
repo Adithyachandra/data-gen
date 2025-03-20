@@ -33,10 +33,21 @@ class MeetingType(str, Enum):
     INCIDENT_REVIEW = "Incident Review"
 
 class MeetingStatus(str, Enum):
-    SCHEDULED = "scheduled"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
+    SCHEDULED = "Scheduled"
+    IN_PROGRESS = "In Progress"
+    COMPLETED = "Completed"
+    CANCELLED = "Cancelled"
+
+class EmailPriority(str, Enum):
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
+
+class EmailStatus(str, Enum):
+    DRAFT = "Draft"
+    SENT = "Sent"
+    DELIVERED = "Delivered"
+    READ = "Read"
 
 class Message(BaseModel):
     id: str = Field(..., description="Unique identifier for the message")
@@ -74,6 +85,21 @@ class Channel(BaseModel):
     threads: List[str] = Field(default_factory=list, description="IDs of threads in the channel")
     is_private: bool = Field(default=False, description="Whether the channel is private")
     pinned_messages: List[str] = Field(default_factory=list, description="IDs of pinned messages")
+
+class Email(BaseModel):
+    id: str = Field(..., description="Unique identifier for the email")
+    subject: str = Field(..., description="Email subject line")
+    content: str = Field(..., description="Email content/body")
+    sender_id: str = Field(..., description="ID of the team member sending the email")
+    recipient_ids: List[str] = Field(..., description="IDs of team members receiving the email")
+    cc_ids: List[str] = Field(default_factory=list, description="IDs of team members CC'd on the email")
+    bcc_ids: List[str] = Field(default_factory=list, description="IDs of team members BCC'd on the email")
+    timestamp: datetime = Field(..., description="When the email was sent")
+    priority: EmailPriority = Field(default=EmailPriority.MEDIUM, description="Email priority level")
+    status: EmailStatus = Field(default=EmailStatus.DRAFT, description="Current status of the email")
+    thread_id: Optional[str] = Field(None, description="ID of the email thread this belongs to")
+    attachments: List[Dict[str, str]] = Field(default_factory=list, description="List of attachments with their metadata")
+    tags: List[str] = Field(default_factory=list, description="Tags/labels for the email")
 
 class Meeting(BaseModel):
     id: str = Field(..., description="Unique identifier for the meeting")

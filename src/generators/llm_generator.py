@@ -196,26 +196,53 @@ class LLMGenerator:
         return response.choices[0].message.content
 
     def generate_code_review_comment(self, code_snippet: str, context: str) -> str:
-        """Generate realistic code review comments."""
-        prompt = f"""Generate a constructive code review comment for the following code snippet:
-        ```
-        {code_snippet}
-        ```
-        Context: {context}
+        """Generate a code review comment based on the code snippet and context."""
+        prompt = f"""You are a senior software engineer reviewing code. Please provide a constructive code review comment for the following code snippet.
         
-        The comment should be:
-        1. Constructive and professional
-        2. Specific to the code
-        3. Include both positive feedback and improvement suggestions where applicable"""
+Context: {context}
+
+Code:
+```
+{code_snippet}
+```
+
+Please provide a helpful and constructive review comment that:
+1. Acknowledges what's good about the code
+2. Suggests specific improvements
+3. Maintains a positive and collaborative tone
+"""
 
         response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an experienced software developer reviewing code."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=200
         )
         
-        return response.choices[0].message.content 
+        return response.choices[0].message.content.strip()
+
+    def generate_email_content(self, sender_name: str, recipient_names: List[str], subject: str, context: str) -> str:
+        """Generate professional email content based on the context."""
+        recipients_str = ", ".join(recipient_names)
+        prompt = f"""You are {sender_name} writing a professional email to {recipients_str}.
+
+Subject: {subject}
+Context: {context}
+
+Please write a professional and clear email that:
+1. Has a proper greeting
+2. Clearly states the purpose
+3. Provides necessary context and details
+4. Includes specific action items or next steps
+5. Ends with a professional closing
+
+The tone should be professional but friendly, and the content should be well-structured."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        return response.choices[0].message.content.strip() 
