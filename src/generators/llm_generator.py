@@ -3,14 +3,20 @@ import os
 from openai import OpenAI
 from datetime import datetime
 import json
+from dotenv import load_dotenv
 
 class LLMGenerator:
     def __init__(self, api_key=None):
-        if api_key is None:
-            api_key = os.getenv('OPENAI_API_KEY')
-            if api_key is None:
-                raise ValueError("OpenAI API key must be provided either as an argument or through OPENAI_API_KEY environment variable")
-        self.client = OpenAI()
+        # Load environment variables from .env file
+        load_dotenv()
+        
+        # Use provided API key or get from environment
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OpenAI API key must be provided either as an argument or through OPENAI_API_KEY environment variable")
+        
+        # Initialize OpenAI client
+        self.client = OpenAI(api_key=self.api_key)
 
     def generate_ticket_description(self, title: str, ticket_type: str, component: str) -> str:
         """Generate a realistic ticket description based on the title and type."""
@@ -243,6 +249,47 @@ The tone should be professional but friendly, and the content should be well-str
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=500
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def generate_meeting_title(self, context: dict) -> str:
+        """Generate a meeting title based on the context."""
+        prompt = f"""Generate a concise and professional title for a {context['meeting_type']} meeting for the {context['team_name']} team.
+        The meeting will last {context['duration_minutes']} minutes.
+        
+        Return only the title, no additional text."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=50
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def generate_meeting_description(self, context: dict) -> str:
+        """Generate a meeting description based on the context."""
+        attendee_list = ", ".join(context['attendees'])
+        
+        prompt = f"""Generate a professional meeting description/agenda for a {context['meeting_type']} meeting.
+        Team: {context['team_name']}
+        Duration: {context['duration_minutes']} minutes
+        Attendees: {attendee_list}
+        
+        Include:
+        1. Meeting purpose
+        2. Key discussion points
+        3. Expected outcomes
+        
+        Keep it concise but informative."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200
         )
         
         return response.choices[0].message.content.strip() 

@@ -4,7 +4,7 @@ import random
 
 from src.models.team import (
     TeamMember, Team, BusinessUnit, Department,
-    Role, Skill, SeniorityLevel
+    Role, Skill, Seniority, SeniorityLevel
 )
 from src.models.ticket import Component
 from src.generators.utils import (
@@ -41,6 +41,9 @@ class TeamGenerator:
 
     def _generate_executive_team(self):
         """Generate C-level executives."""
+        # Create executive team
+        exec_team_id = generate_id("TEAM")
+        
         # Create CEO
         ceo_first, ceo_last = generate_name()
         ceo = TeamMember(
@@ -49,12 +52,29 @@ class TeamGenerator:
             email=generate_email(ceo_first, ceo_last, self.config.email_domain),
             department=Department.OPERATIONS,
             role=Role.COO,  # Using COO as placeholder since we don't have CEO in enum
-            seniority=SeniorityLevel.C_LEVEL,
+            seniority=Seniority.PRINCIPAL,  # Using PRINCIPAL as the highest seniority level
             skills=[Skill.TEAM_LEADERSHIP, Skill.COMMUNICATION],
             join_date=self.company_start_date + timedelta(days=1),
-            office_location=OFFICE_LOCATIONS["headquarters"]
+            office_location=OFFICE_LOCATIONS["headquarters"],
+            team_id=exec_team_id  # Assign CEO to executive team
         )
         self.members[ceo.id] = ceo
+        
+        # Create executive team
+        exec_team = Team(
+            id=exec_team_id,
+            name="Executive Team",
+            department=Department.OPERATIONS,
+            description="Company executive leadership team",
+            manager_id=ceo.id,
+            members=[ceo],
+            tech_stack=[],
+            created_date=self.company_start_date,
+            timezone=self.config.meeting_timezone,
+            is_virtual=False,
+            components=[Component.SECURITY.value]  # Assign SECURITY component to executive team
+        )
+        self.teams[exec_team_id] = exec_team
 
     def _generate_business_unit(self, bu_config: Dict):
         """Generate a business unit and its departments."""
@@ -197,6 +217,18 @@ class TeamGenerator:
         """Generate a team member with appropriate attributes."""
         first_name, last_name = generate_name()
         
+        # Map SeniorityLevel to Seniority
+        seniority_mapping = {
+            SeniorityLevel.C_LEVEL: Seniority.PRINCIPAL,
+            SeniorityLevel.VP: Seniority.PRINCIPAL,
+            SeniorityLevel.DIRECTOR: Seniority.PRINCIPAL,
+            SeniorityLevel.MANAGER: Seniority.LEAD,
+            SeniorityLevel.SENIOR: Seniority.SENIOR,
+            SeniorityLevel.MID: Seniority.MID,
+            SeniorityLevel.JUNIOR: Seniority.JUNIOR,
+            SeniorityLevel.ENTRY: Seniority.JUNIOR
+        }
+        
         # Determine skills based on role
         base_skills = ROLE_SKILL_REQUIREMENTS.get(role.value, [])
         skills = [Skill(skill) for skill in base_skills]
@@ -214,13 +246,16 @@ class TeamGenerator:
         # Determine if remote based on company policy
         is_remote = random.random() < OFFICE_LOCATIONS["remote_percentage"]
         
+        # Generate team ID if not already part of a team
+        team_id = generate_id("TEAM")
+        
         member = TeamMember(
             id=generate_id("EMP"),
             name=f"{first_name} {last_name}",
             email=generate_email(first_name, last_name, self.config.email_domain),
             department=department,
             role=role,
-            seniority=seniority,
+            seniority=seniority_mapping[seniority],
             skills=skills,
             join_date=random_date_between(
                 self.company_start_date,
@@ -229,7 +264,8 @@ class TeamGenerator:
             certifications=certifications,
             languages=["English"],
             office_location=None if is_remote else location,
-            is_remote=is_remote
+            is_remote=is_remote,
+            team_id=team_id
         )
         
         self.members[member.id] = member

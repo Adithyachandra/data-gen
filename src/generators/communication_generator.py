@@ -218,109 +218,48 @@ class CommunicationGenerator:
             attendees = [member.id for member in team_members]
             optional_attendees = []
         else:
-            # Select 50-80% of team members as required attendees
-            num_required = max(2, int(len(team_members) * random.uniform(0.5, 0.8)))
-            attendees = [member.id for member in random.sample(team_members, num_required)]
-            # Rest are optional
-            optional_attendees = [
-                member.id for member in team_members
-                if member.id not in attendees
-            ]
-
-        # Generate meeting topics based on type
-        topics = self._generate_meeting_topics(meeting_type, team)
+            # For small teams (<=3 members), include everyone
+            if len(team_members) <= 3:
+                attendees = [member.id for member in team_members]
+                optional_attendees = []
+            else:
+                # Select 50-80% of team members as required attendees
+                num_required = max(2, min(len(team_members) - 1, int(len(team_members) * random.uniform(0.5, 0.8))))
+                required_members = random.sample(team_members, num_required)
+                attendees = [member.id for member in required_members]
+                # Rest are optional
+                optional_members = [member for member in team_members if member.id not in attendees]
+                optional_attendees = [member.id for member in optional_members]
         
-        # Generate meeting notes and transcript
-        description = self.llm.generate_meeting_notes(
-            meeting_type=meeting_type.value,
-            attendees=[f"Member_{id}" for id in attendees],
-            topics=topics
-        )
+        # Generate meeting title and description using LLM
+        meeting_context = {
+            "team_name": team.name,
+            "meeting_type": meeting_type.value,
+            "attendees": [self.team_members[attendee_id].name for attendee_id in attendees],
+            "duration_minutes": duration_minutes
+        }
         
-        # Only generate transcript for completed meetings
-        transcript = None
-        if end_time < datetime.now():
-            transcript = self.llm.generate_meeting_transcript(
-                meeting_type=meeting_type.value,
-                attendees=[f"Member_{id}" for id in attendees],
-                topics=topics,
-                duration_minutes=duration_minutes
-            )
+        meeting_title = self.llm.generate_meeting_title(meeting_context)
+        meeting_description = self.llm.generate_meeting_description(meeting_context)
         
         meeting = Meeting(
             id=generate_id("MTG"),
             type=meeting_type,
-            title=self._generate_meeting_title(meeting_type, team.name),
-            description=description,
-            transcript=transcript,
+            title=meeting_title,
+            description=meeting_description,
             start_time=start_time,
             end_time=end_time,
             organizer_id=organizer.id,
             attendees=attendees,
             optional_attendees=optional_attendees,
             team_id=team.id,
-            recurring=meeting_type == MeetingType.STANDUP,
-            status=MeetingStatus.COMPLETED if end_time < datetime.now() else MeetingStatus.SCHEDULED
+            notes=None,  # Will be generated after the meeting
+            action_items=[],  # Will be generated after the meeting
+            recurring=meeting_type in [MeetingType.STANDUP],
+            status=MeetingStatus.SCHEDULED
         )
         
         return meeting
-
-    def _generate_meeting_topics(self, meeting_type: MeetingType, team: Team) -> List[str]:
-        """Generate relevant topics for a meeting based on its type."""
-        base_topics = {
-            MeetingType.STANDUP: [
-                "Progress updates",
-                "Blockers and challenges",
-                "Plans for today"
-            ],
-            MeetingType.SPRINT_PLANNING: [
-                "Sprint goals and objectives",
-                "Capacity planning",
-                "Backlog refinement",
-                "Story point estimation"
-            ],
-            MeetingType.SPRINT_REVIEW: [
-                "Sprint accomplishments",
-                "Demo of completed work",
-                "Stakeholder feedback",
-                "Next sprint preview"
-            ],
-            MeetingType.SPRINT_RETRO: [
-                "What went well",
-                "Areas for improvement",
-                "Action items from last retro",
-                "Team collaboration"
-            ],
-            MeetingType.TECHNICAL_DISCUSSION: [
-                "Architecture review",
-                "Technical debt",
-                "Best practices",
-                "Tool improvements"
-            ],
-            MeetingType.TEAM_SYNC: [
-                "Project status",
-                "Upcoming milestones",
-                "Resource allocation",
-                "Cross-team dependencies"
-            ],
-            MeetingType.INCIDENT_REVIEW: [
-                "Incident timeline",
-                "Root cause analysis",
-                "Mitigation strategies",
-                "Prevention measures"
-            ]
-        }
-
-        # Get base topics for the meeting type
-        topics = base_topics.get(meeting_type, ["General discussion"])
-        
-        # Add team-specific topics
-        if team.tech_stack:
-            topics.append(f"{random.choice(team.tech_stack).value} implementation discussion")
-        if team.current_projects:
-            topics.append(f"{random.choice(team.current_projects)} project update")
-            
-        return topics
 
     def generate_sprint_meetings(self, team: Team, sprint: Sprint) -> List[Meeting]:
         """Generate all meetings for a sprint."""
