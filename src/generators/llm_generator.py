@@ -227,31 +227,64 @@ Please provide a helpful and constructive review comment that:
         
         return response.choices[0].message.content.strip()
 
-    def generate_email_content(self, sender_name: str, recipient_names: List[str], subject: str, context: str) -> str:
-        """Generate professional email content based on the context."""
-        recipients_str = ", ".join(recipient_names)
-        prompt = f"""You are {sender_name} writing a professional email to {recipients_str}.
-
-Subject: {subject}
-Context: {context}
-
-Please write a professional and clear email that:
-1. Has a proper greeting
-2. Clearly states the purpose
-3. Provides necessary context and details
-4. Includes specific action items or next steps
-5. Ends with a professional closing
-
-The tone should be professional but friendly, and the content should be well-structured."""
-
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=500
-        )
+    def generate_email_content(
+        self,
+        sender_name: str,
+        recipient_names: List[str],
+        subject: str,
+        context: dict = None
+    ) -> str:
+        """Generate email content based on context and templates."""
+        if context and context.get('ticket'):
+            ticket = context['ticket']
+            template = context.get('template', {})
+            sprint = context.get('sprint')
+            
+            # Build email content based on template sections
+            sections = []
+            for section in template.get('content_sections', []):
+                if section == "Status Change Summary":
+                    sections.append(f"Status Change Summary:\n"
+                                 f"The ticket {ticket.id} ({ticket.title}) has been updated to {ticket.status}.")
+                
+                elif section == "Current Progress":
+                    sections.append(f"Current Progress:\n"
+                                 f"- Implementation is {self._get_progress_percentage(ticket)}% complete\n"
+                                 f"- Current focus: {ticket.current_focus if hasattr(ticket, 'current_focus') else 'Implementation'}\n"
+                                 f"- Time spent: {ticket.time_spent if hasattr(ticket, 'time_spent') else 'Ongoing'}")
+                
+                elif section == "Implementation Overview":
+                    sections.append(f"Implementation Overview:\n"
+                                 f"I've completed the implementation for {ticket.title}. "
+                                 f"The changes include:\n"
+                                 f"- Core functionality implementation\n"
+                                 f"- Unit tests with {ticket.test_coverage if hasattr(ticket, 'test_coverage') else '80%+'} coverage\n"
+                                 f"- Documentation updates")
+                
+                elif section == "Blocker Description":
+                    sections.append(f"Blocker Description:\n"
+                                 f"The ticket is currently blocked due to: {ticket.blocking_reason if hasattr(ticket, 'blocking_reason') else 'technical dependencies'}.\n"
+                                 f"Impact: This is affecting the sprint delivery timeline and needs immediate attention.")
+            
+            # Add sprint context if available
+            if sprint:
+                sections.append(f"\nSprint Context:\n"
+                             f"Sprint: {sprint.name}\n"
+                             f"Sprint Goal: {sprint.goal}\n"
+                             f"Days Remaining: {(sprint.end_date - datetime.now()).days}")
+            
+            # Add call to action
+            sections.append("\nNext Steps:\n"
+                          "Please review and provide your feedback. "
+                          "Let me know if you need any additional information.")
+            
+            return "\n\n".join(sections)
         
-        return response.choices[0].message.content.strip()
+        else:
+            # Generate generic email content
+            return f"Dear {', '.join(recipient_names)},\n\n" + \
+                   self._generate_generic_content(subject, context) + \
+                   f"\n\nBest regards,\n{sender_name}"
 
     def generate_meeting_title(self, context: dict) -> str:
         """Generate a meeting title based on the context."""
@@ -269,27 +302,90 @@ The tone should be professional but friendly, and the content should be well-str
         
         return response.choices[0].message.content.strip()
 
-    def generate_meeting_description(self, context: dict) -> str:
-        """Generate a meeting description based on the context."""
-        attendee_list = ", ".join(context['attendees'])
+    def generate_meeting_description(
+        self,
+        meeting_type: str,
+        organizer_name: str,
+        attendee_names: List[str],
+        context: dict = None
+    ) -> str:
+        """Generate meeting description based on context and templates."""
+        if context and context.get('ticket'):
+            ticket = context['ticket']
+            template = context.get('template', {})
+            sprint = context.get('sprint')
+            is_adhoc = context.get('is_adhoc', False)
+            
+            # Build meeting description based on template
+            sections = []
+            
+            # Meeting overview
+            sections.append(f"Meeting Type: {meeting_type}\n"
+                          f"Organizer: {organizer_name}\n"
+                          f"Attendees: {', '.join(attendee_names)}\n"
+                          f"Duration: {template.get('duration_minutes', 60)} minutes")
+            
+            # Add ticket context
+            sections.append(f"\nTicket Context:\n"
+                          f"ID: {ticket.id}\n"
+                          f"Title: {ticket.summary}\n"
+                          f"Status: {ticket.status}\n"
+                          f"Priority: {ticket.priority}")
+            
+            # Add agenda based on meeting type
+            if template and template.get('agenda_template'):
+                sections.append("\nAgenda:")
+                for item in template['agenda_template']:
+                    sections.append(f"- {item}")
+            
+            # Add sprint context if available
+            if sprint:
+                sections.append(f"\nSprint Context:\n"
+                             f"Sprint: {sprint.name}\n"
+                             f"Sprint Goal: {sprint.goal}\n"
+                             f"Days Remaining: {(sprint.end_date - datetime.now()).days}")
+            
+            # Add expected outcomes
+            if is_adhoc:
+                sections.append("\nExpected Outcomes:\n"
+                              "1. Clear understanding of the current situation\n"
+                              "2. Action plan with assigned owners\n"
+                              "3. Timeline for resolution\n"
+                              "4. Communication plan for stakeholders")
+            
+            return "\n".join(sections)
         
-        prompt = f"""Generate a professional meeting description/agenda for a {context['meeting_type']} meeting.
-        Team: {context['team_name']}
-        Duration: {context['duration_minutes']} minutes
-        Attendees: {attendee_list}
-        
-        Include:
-        1. Meeting purpose
-        2. Key discussion points
-        3. Expected outcomes
-        
-        Keep it concise but informative."""
-        
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=200
-        )
-        
-        return response.choices[0].message.content.strip() 
+        else:
+            # Generate generic meeting description
+            return self._generate_generic_meeting_description(meeting_type, organizer_name, attendee_names)
+
+    def _get_progress_percentage(self, ticket) -> int:
+        """Estimate ticket progress based on status."""
+        status_progress = {
+            'TODO': 0,
+            'IN_PROGRESS': 50,
+            'IN_REVIEW': 80,
+            'DONE': 100
+        }
+        return status_progress.get(str(ticket.status), 30)
+
+    def _generate_generic_content(self, subject: str, context: dict = None) -> str:
+        """Generate generic content when no specific template is available."""
+        return f"I hope this email finds you well.\n\n" + \
+               f"I wanted to touch base regarding {subject}.\n\n" + \
+               f"Please let me know if you have any questions or need additional information."
+
+    def _generate_generic_meeting_description(
+        self,
+        meeting_type: str,
+        organizer_name: str,
+        attendee_names: List[str]
+    ) -> str:
+        """Generate generic meeting description when no specific template is available."""
+        return f"Meeting Type: {meeting_type}\n" + \
+               f"Organizer: {organizer_name}\n" + \
+               f"Attendees: {', '.join(attendee_names)}\n\n" + \
+               f"Agenda:\n" + \
+               f"1. Introduction and Updates\n" + \
+               f"2. Discussion Points\n" + \
+               f"3. Action Items and Next Steps" 

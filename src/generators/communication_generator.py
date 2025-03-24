@@ -13,14 +13,23 @@ from src.generators.utils import (
     generate_id, generate_paragraph, random_date_between,
     weighted_choice
 )
-from src.config.sample_company import INNOVATECH_CONFIG
+from src.config.sample_company import INNOVATECH_CONFIG, MEETING_SCENARIOS, EMAIL_TEMPLATES
 from src.generators.llm_generator import LLMGenerator
 
 class CommunicationGenerator:
-    def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config=INNOVATECH_CONFIG):
+    def __init__(
+        self,
+        team_members: Dict[str, TeamMember],
+        teams: Dict[str, Team],
+        tickets: Dict[str, Ticket] = None,
+        sprints: Dict[str, Sprint] = None,
+        config=INNOVATECH_CONFIG
+    ):
         self.config = config
         self.team_members = team_members
         self.teams = teams
+        self.tickets = tickets or {}
+        self.sprints = sprints or {}
         self.channels: Dict[str, Channel] = {}
         self.messages: Dict[str, Message] = {}
         self.threads: Dict[str, Thread] = {}
@@ -181,194 +190,243 @@ class CommunicationGenerator:
         
         return message
 
-    def generate_meeting(self, team: Team, meeting_type: MeetingType) -> Meeting:
-        """Generate a team meeting."""
-        # Get team members
-        team_members = team.members
+    def generate_meeting(
+        self,
+        organizer: TeamMember,
+        attendees: List[TeamMember],
+        meeting_type: str,
+        context: dict = None,
+        is_adhoc: bool = False
+    ) -> Meeting:
+        """Generate a meeting with context from tickets and templates."""
+        meeting_id = generate_id("MTG")
         
-        # Select meeting organizer (prefer team manager)
-        organizer = next(
-            (member for member in team_members if member.id == team.manager_id),
-            random.choice(team_members)
-        )
+        # Get meeting template
+        template = MEETING_SCENARIOS.get('adhoc' if is_adhoc else 'standard', {}).get(meeting_type, {})
         
-        # Determine meeting duration based on type
-        duration_minutes = {
-            MeetingType.STANDUP: 15,
-            MeetingType.SPRINT_PLANNING: 120,
-            MeetingType.SPRINT_REVIEW: 60,
-            MeetingType.SPRINT_RETRO: 60,
-            MeetingType.TECHNICAL_DISCUSSION: 60,
-            MeetingType.TEAM_SYNC: 30,
-            MeetingType.INCIDENT_REVIEW: 45
-        }.get(meeting_type, 30)
-        
-        # Set meeting time during working hours
-        start_time = datetime.now() - timedelta(days=random.randint(1, 30))
-        start_time = start_time.replace(
-            hour=random.randint(9, 16),
-            minute=random.choice([0, 15, 30, 45]),
-            second=0,
-            microsecond=0
-        )
-        end_time = start_time + timedelta(minutes=duration_minutes)
-        
-        # Select attendees (everyone for important meetings, subset for others)
-        if meeting_type in [MeetingType.SPRINT_PLANNING, MeetingType.SPRINT_REVIEW, MeetingType.SPRINT_RETRO]:
-            attendees = [member.id for member in team_members]
-            optional_attendees = []
-        else:
-            # For small teams (<=3 members), include everyone
-            if len(team_members) <= 3:
-                attendees = [member.id for member in team_members]
-                optional_attendees = []
-            else:
-                # Select 50-80% of team members as required attendees
-                num_required = max(2, min(len(team_members) - 1, int(len(team_members) * random.uniform(0.5, 0.8))))
-                required_members = random.sample(team_members, num_required)
-                attendees = [member.id for member in required_members]
-                # Rest are optional
-                optional_members = [member for member in team_members if member.id not in attendees]
-                optional_attendees = [member.id for member in optional_members]
-        
-        # Generate meeting title and description using LLM
-        meeting_context = {
-            "team_name": team.name,
-            "meeting_type": meeting_type.value,
-            "attendees": [self.team_members[attendee_id].name for attendee_id in attendees],
-            "duration_minutes": duration_minutes
-        }
-        
-        meeting_title = self.llm.generate_meeting_title(meeting_context)
-        meeting_description = self.llm.generate_meeting_description(meeting_context)
-        
-        meeting = Meeting(
-            id=generate_id("MTG"),
-            type=meeting_type,
-            title=meeting_title,
-            description=meeting_description,
-            start_time=start_time,
-            end_time=end_time,
-            organizer_id=organizer.id,
-            attendees=attendees,
-            optional_attendees=optional_attendees,
-            team_id=team.id,
-            notes=None,  # Will be generated after the meeting
-            action_items=[],  # Will be generated after the meeting
-            recurring=meeting_type in [MeetingType.STANDUP],
-            status=MeetingStatus.SCHEDULED
-        )
-        
-        return meeting
-
-    def generate_sprint_meetings(self, team: Team, sprint: Sprint) -> List[Meeting]:
-        """Generate all meetings for a sprint."""
-        meetings = []
-        
-        # Sprint Planning
-        planning = self.generate_meeting(team, MeetingType.SPRINT_PLANNING, sprint)
-        meetings.append(planning)
-        
-        # Daily Standups (one per day)
-        sprint_days = (sprint.end_date - sprint.start_date).days
-        for day in range(sprint_days):
-            if day % 7 not in [5, 6]:  # Skip weekends
-                standup = self.generate_meeting(team, MeetingType.STANDUP, sprint)
-                meetings.append(standup)
-        
-        # Sprint Review and Retro (if sprint is completed)
-        if sprint.status == "completed":
-            review = self.generate_meeting(team, MeetingType.SPRINT_REVIEW, sprint)
-            retro = self.generate_meeting(team, MeetingType.SPRINT_RETRO, sprint)
-            meetings.extend([review, retro])
-        
-        return meetings
-
-    def generate_ticket_communication(self, ticket: Ticket) -> Dict[str, List[Message]]:
-        """Generate communication around a ticket."""
-        messages = []
-        
-        # Find the team for the ticket's assignee
-        team = None
-        for t in self.teams.values():
-            if any(member.id == ticket.assignee_id for member in t.members):
-                team = t
-                break
-        
-        if team is None:
-            # If we can't find the team, skip generating communication
-            return {"messages": []}
-        
-        # Generate initial discussion
-        channel = self.get_or_create_team_channel(team)
-        
-        # Create a thread about the ticket
-        thread_id = generate_id("THR")
-        
-        # Initial message about ticket creation
-        initial_message = Message(
-            id=generate_id("MSG"),
-            channel_id=channel.id,
-            thread_id=thread_id,
-            sender_id=ticket.reporter_id,
-            content=f"Created ticket {ticket.id}: {ticket.summary}",
-            type=CommunicationType.CHAT,
-            created_at=ticket.created_at,
-            updated_at=ticket.created_at,
-            mentions=[ticket.assignee_id] if ticket.assignee_id else [],
-            reactions={},
-            attachments=[],
-            metadata={
-                "ticket_id": ticket.id,
-                "ticket_type": ticket.type.value,
-                "ticket_status": ticket.status.value
-            }
-        )
-        messages.append(initial_message)
-        
-        # Generate some follow-up discussion
-        num_replies = random.randint(1, 4)
-        current_time = ticket.created_at
-        
-        for _ in range(num_replies):
-            current_time += timedelta(hours=random.randint(1, 8))
+        # Generate meeting title and description
+        if context and context.get('ticket'):
+            ticket = context['ticket']
+            title = f"{meeting_type}: {ticket.summary}"
             
-            # Select a random participant from the team
-            sender = random.choice(team.members)
-            
-            # Generate message content based on ticket type and status
-            content = self._generate_ticket_discussion_message(ticket)
-            
-            reply = Message(
-                id=generate_id("MSG"),
-                channel_id=channel.id,
-                thread_id=thread_id,
-                sender_id=sender.id,
-                content=content,
-                type=CommunicationType.CHAT,
-                created_at=current_time,
-                updated_at=current_time,
-                mentions=[],
-                reactions={},
-                attachments=[],
-                metadata={
-                    "ticket_id": ticket.id,
-                    "ticket_type": ticket.type.value,
-                    "ticket_status": ticket.status.value
+            # Generate description using LLM with ticket context
+            description = self.llm.generate_meeting_description(
+                meeting_type=meeting_type,
+                organizer_name=organizer.name,
+                attendee_names=[a.name for a in attendees],
+                context={
+                    "template": template,
+                    "ticket": ticket,
+                    "sprint": self.sprints.get(ticket.sprint_id) if ticket.sprint_id else None,
+                    "is_adhoc": is_adhoc
                 }
             )
-            messages.append(reply)
-            
-            # Randomly add some reactions
-            if random.random() < 0.3:
-                reactors = random.sample(
-                    team.members,
-                    k=random.randint(1, min(3, len(team.members)))
-                )
-                reaction = random.choice(["👍", "🎉", "💯", "✅"])
-                reply.reactions[reaction] = [r.id for r in reactors]
+        else:
+            title = f"{meeting_type} Meeting"
+            description = self.llm.generate_meeting_description(
+                meeting_type=meeting_type,
+                organizer_name=organizer.name,
+                attendee_names=[a.name for a in attendees],
+                context={"template": template, "is_adhoc": is_adhoc}
+            )
+
+        # Create meeting object
+        meeting = Meeting(
+            id=meeting_id,
+            title=title,
+            description=description,
+            organizer_id=organizer.id,
+            attendee_ids=[a.id for a in attendees],
+            attendees=[a.id for a in attendees],  # Required field
+            start_time=datetime.now(),
+            end_time=datetime.now() + timedelta(minutes=template.get('duration_minutes', 60)),
+            type=MeetingType(meeting_type),  # Required field
+            team_id=organizer.team_id,  # Required field
+            status=MeetingStatus.SCHEDULED,  # Required field with correct enum value
+            location="Virtual Meeting Room",
+            agenda=template.get('agenda_template', []),
+            notes=None  # Notes will be generated after the meeting
+        )
         
-        return {"messages": messages}
+        self.meetings[meeting_id] = meeting
+        return meeting
+
+    def generate_sprint_communications(self, sprint: Sprint, team: Team) -> Dict[str, List]:
+        """Generate all communications for a sprint."""
+        result = {
+            "emails": [],
+            "meetings": [],
+            "adhoc_meetings": []
+        }
+        
+        # Get sprint tickets
+        sprint_tickets = [t for t in self.tickets.values() if t.sprint_id == sprint.id]
+        
+        # Generate standard sprint meetings
+        for meeting_type in ["Sprint Planning", "Sprint Review"]:
+            meeting = self.generate_meeting(
+                organizer=team.get_tech_lead(),
+                attendees=team.get_all_members(),
+                meeting_type=meeting_type,
+                context={"sprint": sprint, "tickets": sprint_tickets}
+            )
+            result["meetings"].append(meeting)
+        
+        # Generate daily standups
+        for day in range(sprint.duration_days):
+            if day % 7 < 5:  # Weekdays only
+                standup = self.generate_meeting(
+                    organizer=team.get_tech_lead(),
+                    attendees=team.get_all_members(),
+                    meeting_type="Daily Standup",
+                    context={"sprint": sprint, "day": day}
+                )
+                result["meetings"].append(standup)
+        
+        # Generate ticket-based communications
+        for ticket in sprint_tickets:
+            # Generate status update emails
+            if ticket.status in [TicketStatus.IN_PROGRESS, TicketStatus.DONE]:
+                email = self.generate_email(
+                    sender=self.team_members[ticket.assignee_id],
+                    recipients=[self.team_members[ticket.reporter_id]],
+                    email_type="ticket_status_update",
+                    context={"ticket": ticket}
+                )
+                result["emails"].append(email)
+            
+            # Generate ad-hoc meetings based on ticket context
+            adhoc_meeting = self.generate_adhoc_meeting_for_ticket(ticket, team)
+            if adhoc_meeting:
+                result["adhoc_meetings"].append(adhoc_meeting)
+            
+            # Generate code review emails
+            if ticket.status == TicketStatus.IN_REVIEW:
+                email = self.generate_email(
+                    sender=self.team_members[ticket.assignee_id],
+                    recipients=[r for r in team.get_senior_engineers()],
+                    email_type="code_review_request",
+                    context={"ticket": ticket}
+                )
+                result["emails"].append(email)
+            
+            # Generate blocking issue alerts
+            if ticket.status == TicketStatus.BLOCKED:
+                email = self.generate_email(
+                    sender=self.team_members[ticket.assignee_id],
+                    recipients=[team.get_tech_lead()],
+                    email_type="blocking_issue_alert",
+                    context={"ticket": ticket}
+                )
+                result["emails"].append(email)
+        
+        return result
+
+    def generate_email(
+        self,
+        sender: TeamMember,
+        recipients: List[TeamMember],
+        subject: str = None,
+        context: dict = None,
+        email_type: str = None
+    ) -> Email:
+        """Generate an email with context from tickets and templates."""
+        email_id = generate_id("EMAIL")
+        
+        if context and context.get('ticket'):
+            ticket = context['ticket']
+            template = EMAIL_TEMPLATES.get(email_type or 'ticket_status_update')
+            
+            if not subject and template:
+                subject = template['subject_template'].format(
+                    ticket_id=ticket.id,
+                    ticket_title=ticket.title
+                )
+            
+            content = self.llm.generate_email_content(
+                sender_name=sender.name,
+                recipient_names=[r.name for r in recipients],
+                subject=subject,
+                context={
+                    "template": template,
+                    "ticket": ticket,
+                    "sprint": self.sprints.get(ticket.sprint_id) if ticket.sprint_id else None
+                }
+            )
+        else:
+            # Generic email without ticket context
+            content = self.llm.generate_email_content(
+                sender_name=sender.name,
+                recipient_names=[r.name for r in recipients],
+                subject=subject,
+                context=context
+            )
+
+        email = Email(
+            id=email_id,
+            subject=subject,
+            content=content,
+            sender_id=sender.id,
+            recipient_ids=[r.id for r in recipients],
+            timestamp=datetime.now(),
+            thread_id=generate_id("THREAD"),
+            status="sent"
+        )
+        
+        self.emails[email_id] = email
+        return email
+
+    def generate_adhoc_meeting_for_ticket(
+        self,
+        ticket: Ticket,
+        team: Team
+    ) -> Optional[Meeting]:
+        """Generate an ad-hoc meeting based on ticket context."""
+        # Determine appropriate ad-hoc meeting type based on ticket
+        meeting_type = None
+        if ticket.status == TicketStatus.BLOCKED:
+            meeting_type = "Blocking Issue Resolution"
+        elif ticket.type == "BUG" and ticket.priority == "HIGH":
+            meeting_type = "Bug Triage"
+        elif ticket.type == "EPIC" or "design" in ticket.summary.lower():
+            meeting_type = "Technical Design Review"
+        elif "review" in ticket.summary.lower() or ticket.type == "CODE_REVIEW":
+            meeting_type = "Code Review Sync"
+        
+        if not meeting_type:
+            return None
+            
+        # Get meeting template
+        template = MEETING_SCENARIOS['adhoc'][meeting_type]
+        
+        # Select attendees based on required and optional roles
+        required_attendees = []
+        optional_attendees = []
+        
+        for member in team.members:
+            if member.role in template['required_roles']:
+                required_attendees.append(self.team_members[member.id])
+            elif template.get('optional_roles') and member.role in template['optional_roles']:
+                optional_attendees.append(self.team_members[member.id])
+        
+        # Ensure we have required attendees
+        if not required_attendees:
+            return None
+            
+        # Add some optional attendees
+        attendees = required_attendees + random.sample(
+            optional_attendees,
+            min(2, len(optional_attendees))
+        )
+        
+        # Generate the meeting
+        return self.generate_meeting(
+            organizer=required_attendees[0],  # First required attendee organizes
+            attendees=attendees,
+            meeting_type=meeting_type,
+            context={"ticket": ticket},
+            is_adhoc=True
+        )
 
     def get_channel_activity(self, channel_id: str, time_period: timedelta = timedelta(days=7)) -> Dict:
         """Get activity statistics for a channel."""
@@ -557,31 +615,3 @@ class CommunicationGenerator:
         ]
         
         return f"{base_description}\n\nAgenda:\n- " + "\n- ".join(agenda_items) 
-
-    def generate_email(self, sender: TeamMember, recipients: List[TeamMember], subject: str, context: str) -> Email:
-        """Generate an email with realistic content."""
-        email_id = generate_id()
-        
-        # Generate email content using LLM
-        content = self.llm.generate_email_content(
-            sender_name=sender.name,
-            recipient_names=[r.name for r in recipients],
-            subject=subject,
-            context=context
-        )
-        
-        # Create the email
-        email = Email(
-            id=email_id,
-            subject=subject,
-            content=content,
-            sender_id=sender.id,
-            recipient_ids=[r.id for r in recipients],
-            timestamp=datetime.now(),
-            priority=EmailPriority.MEDIUM,
-            status=EmailStatus.SENT,
-            tags=["sprint-planning", "backend-enhancement"]
-        )
-        
-        self.emails[email_id] = email
-        return email 
