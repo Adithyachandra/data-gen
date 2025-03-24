@@ -632,4 +632,199 @@ class TicketGenerator:
             if hasattr(ticket, attr_name):
                 related_ids = getattr(ticket, attr_name)
                 for related_id in related_ids:
-                    add_relationship(attr_name, related_id, "outgoing") 
+                    add_relationship(attr_name, related_id, "outgoing")
+
+    def generate_ticket(self, team, ticket_type=None, parent_epic=None):
+        """Generate a single ticket with realistic content based on team context."""
+        ticket_id = generate_id()
+        
+        # Get team's focus areas and tech stack
+        team_focus = next((t["focus_areas"] for t in self.config.DEPARTMENT_STRUCTURE["Engineering"]["teams"] 
+                          if t["name"] == team.name), [])
+        tech_stack = next((t["tech_stack"] for t in self.config.DEPARTMENT_STRUCTURE["Engineering"]["teams"] 
+                          if t["name"] == team.name), [])
+        
+        # Determine ticket type if not provided
+        if not ticket_type:
+            ticket_type = random.choice([TicketType.STORY, TicketType.BUG, TicketType.TASK])
+            if random.random() < 0.1:  # 10% chance for epic
+                ticket_type = TicketType.EPIC
+        
+        # Get relevant templates and scenarios
+        component = random.choice(team.components)
+        templates = self.config.STORY_TEMPLATES.get(component.value, {})
+        scenarios = self.config.PRODUCT_SCENARIOS["Enterprise Workflow Automation"]
+        initiatives = self.config.PRODUCT_INITIATIVES
+        
+        # Generate content based on ticket type
+        if ticket_type == TicketType.EPIC:
+            # Select a product initiative
+            initiative = random.choice(list(initiatives.values()))
+            title = f"[{component.value}] {initiative['description']}"
+            description = self._generate_epic_description(
+                initiative,
+                scenarios,
+                team_focus
+            )
+        
+        elif ticket_type == TicketType.STORY:
+            if templates:
+                feature = random.choice(templates["features"])
+                title = f"[{component.value}] {feature}"
+                description = self._generate_story_description(
+                    feature,
+                    scenarios,
+                    team_focus,
+                    tech_stack
+                )
+            else:
+                title = f"[{component.value}] Generic story"
+                description = "Default story description"
+        
+        elif ticket_type == TicketType.BUG:
+            title = f"[{component.value}] Fix issue with {random.choice(team_focus)}"
+            description = self._generate_bug_description(
+                scenarios,
+                team_focus,
+                tech_stack
+            )
+        
+        else:  # TASK
+            if templates:
+                improvement = random.choice(templates["improvements"])
+                title = f"[{component.value}] {improvement}"
+                description = self._generate_task_description(
+                    improvement,
+                    scenarios,
+                    team_focus,
+                    tech_stack
+                )
+            else:
+                title = f"[{component.value}] Generic task"
+                description = "Default task description"
+        
+        # Generate story points based on complexity
+        story_points = random.choice(self.config.default_story_points)
+        
+        # Create and return the ticket
+        return Ticket(
+            id=ticket_id,
+            title=title,
+            description=description,
+            ticket_type=ticket_type,
+            status=TicketStatus.TODO,
+            priority=random.choice(list(TicketPriority)),
+            story_points=story_points,
+            components=[component],
+            epic_id=parent_epic.id if parent_epic else None
+        )
+
+    def _generate_epic_description(self, initiative, scenarios, team_focus):
+        """Generate a detailed epic description based on product initiatives."""
+        description = f"""Background:
+{initiative['description']}
+
+Objectives:
+{chr(10).join(f'- {obj}' for obj in initiative['objectives'])}
+
+Success Metrics:
+{chr(10).join(f'- {metric}' for metric in initiative['success_metrics'])}
+
+Current Challenges:
+{chr(10).join(f'- {challenge}' for challenge in scenarios['current_challenges'] if any(focus in challenge.lower() for focus in team_focus))}
+
+Implementation Areas:
+{chr(10).join(f'- {area}' for area in team_focus)}
+"""
+        return description
+
+    def _generate_story_description(self, feature, scenarios, team_focus, tech_stack):
+        """Generate a detailed user story description."""
+        # Find relevant persona
+        persona = random.choice(scenarios['user_personas'])
+        
+        description = f"""As a {persona['role']},
+I want to {feature.lower()}
+So that I can {random.choice(persona['needs']).lower()}
+
+Background:
+This story is part of our efforts to enhance {random.choice(team_focus)}.
+It aligns with our platform's {random.choice(scenarios['key_features'])} capabilities.
+
+Technical Context:
+- Technology stack: {', '.join(tech_stack)}
+- Integration points: {random.choice(scenarios['key_features'])}
+- Performance requirements: Response time < 500ms
+
+Acceptance Criteria:
+1. Feature is implemented according to design specifications
+2. Unit tests achieve > 80% coverage
+3. Integration tests pass successfully
+4. Performance metrics meet requirements
+5. Documentation is updated
+
+Technical Notes:
+- Consider using {random.choice(tech_stack)} best practices
+- Ensure error handling follows platform standards
+- Add monitoring and logging
+"""
+        return description
+
+    def _generate_bug_description(self, scenarios, team_focus, tech_stack):
+        """Generate a realistic bug description."""
+        feature = random.choice(scenarios['key_features'])
+        
+        description = f"""Issue Summary:
+Users are experiencing issues with {feature} when performing {random.choice(team_focus)} operations.
+
+Impact:
+- Severity: {random.choice(['High', 'Medium', 'Low'])}
+- Affected users: {random.choice(['All users', 'Process Managers', 'Department Heads', 'End Users'])}
+- Business impact: {random.choice(['Workflow delays', 'Data processing errors', 'User experience degradation'])}
+
+Steps to Reproduce:
+1. Navigate to {feature} section
+2. Attempt to perform {random.choice(team_focus)}
+3. Observe error in system response
+
+Expected Behavior:
+The operation should complete successfully and update the system state.
+
+Current Behavior:
+The operation fails with {random.choice(['timeout', 'validation error', 'system error'])}.
+
+Technical Context:
+- Affected component: {random.choice(tech_stack)}
+- Related services: {', '.join(random.sample(tech_stack, min(2, len(tech_stack))))}
+- Error logs attached
+
+Proposed Solution:
+Investigate and fix the issue in the {random.choice(tech_stack)} component while ensuring proper error handling and logging.
+"""
+        return description
+
+    def _generate_task_description(self, improvement, scenarios, team_focus, tech_stack):
+        """Generate a detailed technical task description."""
+        description = f"""Technical Task Summary:
+Implement {improvement} for the {random.choice(team_focus)} component.
+
+Context:
+This task is part of our ongoing efforts to improve {random.choice(scenarios['key_features'])}.
+
+Technical Requirements:
+1. Use {random.choice(tech_stack)} for implementation
+2. Follow team's coding standards
+3. Add appropriate logging and monitoring
+4. Update technical documentation
+
+Implementation Notes:
+- Consider impact on {random.choice(team_focus)}
+- Ensure backward compatibility
+- Add necessary test coverage
+- Update deployment scripts if needed
+
+Dependencies:
+- {random.choice(tech_stack)} environment
+- Access to {random.choice(scenarios['key_features'])} API
+"""
+        return description 

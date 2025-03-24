@@ -111,7 +111,8 @@ class TeamGenerator:
                 department=Department(dept_name),
                 role=Role[role_name],
                 seniority=SeniorityLevel.VP if "VP" in role_name else SeniorityLevel.DIRECTOR,
-                location=business_unit.location
+                location=business_unit.location,
+                team_id=generate_id("TEAM")  # Generate a team ID for department head
             )
             if role_name.startswith("C"):  # C-level executive
                 business_unit.head_id = member.id
@@ -133,7 +134,8 @@ class TeamGenerator:
             department=Department(dept_name),
             role=Role.TECH_LEAD,
             seniority=SeniorityLevel.SENIOR,
-            location=business_unit.location
+            location=business_unit.location,
+            team_id=team_id
         )
         team_members.append(lead)
         self.members[lead.id] = lead
@@ -161,7 +163,8 @@ class TeamGenerator:
                 department=Department(dept_name),
                 role=role,
                 seniority=SeniorityLevel.MID,
-                location=business_unit.location
+                location=business_unit.location,
+                team_id=team_id
             )
             team_members.append(member)
             self.members[member.id] = member
@@ -212,7 +215,8 @@ class TeamGenerator:
         department: Department,
         role: Role,
         seniority: SeniorityLevel,
-        location: str
+        location: str,
+        team_id: str = None
     ) -> TeamMember:
         """Generate a team member with appropriate attributes."""
         first_name, last_name = generate_name()
@@ -245,9 +249,6 @@ class TeamGenerator:
         
         # Determine if remote based on company policy
         is_remote = random.random() < OFFICE_LOCATIONS["remote_percentage"]
-        
-        # Generate team ID if not already part of a team
-        team_id = generate_id("TEAM")
         
         member = TeamMember(
             id=generate_id("EMP"),
