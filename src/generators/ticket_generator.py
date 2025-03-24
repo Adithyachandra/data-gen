@@ -12,7 +12,7 @@ from src.generators.utils import (
     generate_id, generate_ticket_id, random_date_between,
     weighted_choice, generate_paragraph, random_subset
 )
-from src.config.sample_company import INNOVATECH_CONFIG
+from src.config.sample_company import INNOVATECH_CONFIG, PRODUCT_INITIATIVES, PRODUCT_SCENARIOS, STORY_TEMPLATES
 from src.generators.llm_generator import LLMGenerator
 
 class TicketGenerator:
@@ -30,6 +30,14 @@ class TicketGenerator:
         self.ticket_counter = 1
         self.sprint_counter = 1
         self.fix_versions: Dict[str, FixVersion] = self._generate_fix_versions()
+        
+        # Default ticket generation parameters
+        self.stories_per_sprint = random.randint(2, 4)
+        self.tasks_per_story = random.randint(2, 4)
+        self.subtasks_per_task = random.randint(1, 3)
+        
+        # Product initiative
+        self.current_initiative = None
         
         # Relationship probabilities
         self.dependency_probability = 0.3  # 30% chance of dependencies between stories
@@ -120,22 +128,33 @@ class TicketGenerator:
         # Select story owner
         story_owner = random.choice(list(self.team_members.values()))
         
-        # Generate acceptance criteria
-        acceptance_criteria = [
-            "System should validate all inputs",
-            "Performance metrics should meet SLA requirements",
-            "All error cases should be handled gracefully",
-            "Documentation should be updated"
-        ]
+        # Generate story content using GPT-4
+        story_content = self.llm.generate_ticket_description(
+            title=f"Story: Implement {component.value} Feature",
+            ticket_type="Story",
+            component=component.value,
+            prompt=f"""Generate a detailed story description including:
+1. User story format (As a... I want... So that...)
+2. Feature context
+3. Technical context
+4. Detailed acceptance criteria
+5. Technical requirements
+6. Performance requirements
+7. Security requirements
+8. Testing requirements
+9. User persona and needs
+
+Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+        )
+        
+        # Parse the generated content to extract acceptance criteria and user persona
+        acceptance_criteria = self.llm.extract_acceptance_criteria(story_content)
+        user_persona = self.llm.extract_user_persona(story_content)
         
         story = Story(
             id=story_id,
             summary=f"Story: Implement {component.value} Feature",
-            description=self.llm.generate_ticket_description(
-                title=f"Story: Implement {component.value} Feature",
-                ticket_type="Story",
-                component=component.value
-            ),
+            description=story_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
             epic_link=epic.id,
@@ -146,7 +165,7 @@ class TicketGenerator:
             updated_at=datetime.now() - timedelta(days=random.randint(1, 15)),
             story_points=5,
             acceptance_criteria=acceptance_criteria,
-            user_persona="Power User"
+            user_persona=user_persona
         )
         
         self.stories[story_id] = story
@@ -160,14 +179,34 @@ class TicketGenerator:
         # Select task owner
         task_owner = random.choice(list(self.team_members.values()))
         
+        # Generate task content using GPT-4
+        task_content = self.llm.generate_ticket_description(
+            title=f"Task: Implement {component.value} Component",
+            ticket_type="Task",
+            component=component.value,
+            prompt=f"""Generate a detailed task description including:
+1. Technical task summary
+2. Context and background
+3. Technical requirements
+4. Performance requirements
+5. Implementation notes
+6. Dependencies
+7. Testing requirements
+8. Documentation requirements
+9. Review requirements
+10. Estimated hours and technical details
+
+Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+        )
+        
+        # Parse the generated content to extract estimated hours and technical details
+        estimated_hours = self.llm.extract_estimated_hours(task_content)
+        technical_details = self.llm.extract_technical_details(task_content)
+        
         task = Task(
             id=task_id,
             summary=f"Task: Implement {component.value} Component",
-            description=self.llm.generate_ticket_description(
-                title=f"Task: Implement {component.value} Component",
-                ticket_type="Task",
-                component=component.value
-            ),
+            description=task_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
             epic_link=story.epic_link,
@@ -177,8 +216,8 @@ class TicketGenerator:
             components=[component],
             created_at=datetime.now() - timedelta(days=random.randint(5, 15)),
             updated_at=datetime.now() - timedelta(days=random.randint(1, 5)),
-            estimated_hours=4.0,
-            technical_details="Implementation should follow our coding standards and include unit tests."
+            estimated_hours=estimated_hours,
+            technical_details=technical_details
         )
         
         self.tasks[task_id] = task
@@ -192,14 +231,31 @@ class TicketGenerator:
         # Select subtask owner
         subtask_owner = random.choice(list(self.team_members.values()))
         
+        # Generate subtask content using GPT-4
+        subtask_content = self.llm.generate_ticket_description(
+            title=f"Subtask: Implement {component.value} Subcomponent",
+            ticket_type="Subtask",
+            component=component.value,
+            prompt=f"""Generate a detailed subtask description including:
+1. Technical subtask summary
+2. Context and background
+3. Technical requirements
+4. Implementation notes
+5. Dependencies
+6. Testing requirements
+7. Documentation requirements
+8. Estimated hours
+
+Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+        )
+        
+        # Parse the generated content to extract estimated hours
+        estimated_hours = self.llm.extract_estimated_hours(subtask_content)
+        
         subtask = Subtask(
             id=subtask_id,
             summary=f"Subtask: Implement {component.value} Subcomponent",
-            description=self.llm.generate_ticket_description(
-                title=f"Subtask: Implement {component.value} Subcomponent",
-                ticket_type="Subtask",
-                component=component.value
-            ),
+            description=subtask_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
             epic_link=task.epic_link,
@@ -209,7 +265,7 @@ class TicketGenerator:
             components=[component],
             created_at=datetime.now() - timedelta(days=random.randint(1, 5)),
             updated_at=datetime.now() - timedelta(hours=random.randint(1, 24)),
-            estimated_hours=2.0
+            estimated_hours=estimated_hours
         )
         
         self.subtasks[subtask_id] = subtask
@@ -443,23 +499,20 @@ class TicketGenerator:
         epic = self.generate_epic(component)
         
         # Generate stories
-        num_stories = random.randint(2, 4)
         stories = []
-        for _ in range(num_stories):
+        for _ in range(self.stories_per_sprint):
             story = self.generate_story(epic, component)
             stories.append(story)
             
             # Generate tasks for each story
-            num_tasks = random.randint(2, 4)
             tasks = []
-            for _ in range(num_tasks):
+            for _ in range(self.tasks_per_story):
                 task = self.generate_task(story, component)
                 tasks.append(task)
                 
                 # Generate subtasks for each task
-                num_subtasks = random.randint(1, 3)
                 subtasks = []
-                for _ in range(num_subtasks):
+                for _ in range(self.subtasks_per_task):
                     subtask = self.generate_subtask(task, component)
                     subtasks.append(subtask)
                     self.assign_ticket_to_sprint(subtask, sprint)
@@ -634,6 +687,12 @@ class TicketGenerator:
                 for related_id in related_ids:
                     add_relationship(attr_name, related_id, "outgoing")
 
+    def set_product_initiative(self, initiative_name: str):
+        """Set the current product initiative to focus on."""
+        if initiative_name not in PRODUCT_INITIATIVES:
+            raise ValueError(f"Unknown product initiative: {initiative_name}")
+        self.current_initiative = initiative_name
+
     def generate_ticket(self, team, ticket_type=None, parent_epic=None):
         """Generate a single ticket with realistic content based on team context."""
         ticket_id = generate_id()
@@ -652,52 +711,82 @@ class TicketGenerator:
         
         # Get relevant templates and scenarios
         component = random.choice(team.components)
-        templates = self.config.STORY_TEMPLATES.get(component.value, {})
-        scenarios = self.config.PRODUCT_SCENARIOS["Enterprise Workflow Automation"]
-        initiatives = self.config.PRODUCT_INITIATIVES
+        templates = STORY_TEMPLATES.get(component.value, {})
+        scenarios = PRODUCT_SCENARIOS["Enterprise Workflow Automation"]
         
         # Generate content based on ticket type
         if ticket_type == TicketType.EPIC:
-            # Select a product initiative
-            initiative = random.choice(list(initiatives.values()))
-            title = f"[{component.value}] {initiative['description']}"
+            # Use current initiative if set, otherwise random
+            initiative_name = self.current_initiative or random.choice(list(PRODUCT_INITIATIVES.keys()))
+            initiative = PRODUCT_INITIATIVES[initiative_name]
+            # Select a specific feature from the product scenarios
+            feature = random.choice(scenarios['key_features'])
+            title = f"[{component.value}] {initiative['description']} - {feature}"
             description = self._generate_epic_description(
                 initiative,
                 scenarios,
-                team_focus
+                team_focus,
+                feature
             )
         
         elif ticket_type == TicketType.STORY:
-            if templates:
-                feature = random.choice(templates["features"])
-                title = f"[{component.value}] {feature}"
+            # Use current initiative's objectives for stories
+            if self.current_initiative:
+                initiative = PRODUCT_INITIATIVES[self.current_initiative]
+                objective = random.choice(initiative['objectives'])
+                # Select a specific feature and persona
+                feature = random.choice(scenarios['key_features'])
+                persona = random.choice(scenarios['user_personas'])
+                title = f"[{component.value}] {objective} for {feature}"
                 description = self._generate_story_description(
-                    feature,
+                    objective,
                     scenarios,
                     team_focus,
-                    tech_stack
+                    tech_stack,
+                    initiative,
+                    feature,
+                    persona
                 )
             else:
-                title = f"[{component.value}] Generic story"
-                description = "Default story description"
+                # Fall back to templates if no initiative specified
+                if templates:
+                    feature = random.choice(templates["features"])
+                    persona = random.choice(scenarios['user_personas'])
+                    title = f"[{component.value}] {feature}"
+                    description = self._generate_story_description(
+                        feature,
+                        scenarios,
+                        team_focus,
+                        tech_stack,
+                        None,
+                        feature,
+                        persona
+                    )
+                else:
+                    title = f"[{component.value}] Generic story"
+                    description = "Default story description"
         
         elif ticket_type == TicketType.BUG:
-            title = f"[{component.value}] Fix issue with {random.choice(team_focus)}"
+            feature = random.choice(scenarios['key_features'])
+            title = f"[{component.value}] Fix issue with {feature} in {random.choice(team_focus)}"
             description = self._generate_bug_description(
                 scenarios,
                 team_focus,
-                tech_stack
+                tech_stack,
+                feature
             )
         
         else:  # TASK
             if templates:
                 improvement = random.choice(templates["improvements"])
-                title = f"[{component.value}] {improvement}"
+                feature = random.choice(scenarios['key_features'])
+                title = f"[{component.value}] {improvement} for {feature}"
                 description = self._generate_task_description(
                     improvement,
                     scenarios,
                     team_focus,
-                    tech_stack
+                    tech_stack,
+                    feature
                 )
             else:
                 title = f"[{component.value}] Generic task"
@@ -719,112 +808,111 @@ class TicketGenerator:
             epic_id=parent_epic.id if parent_epic else None
         )
 
-    def _generate_epic_description(self, initiative, scenarios, team_focus):
-        """Generate a detailed epic description based on product initiatives."""
-        description = f"""Background:
-{initiative['description']}
+    def _generate_epic_description(self, initiative, scenarios, team_focus, feature):
+        """Generate a detailed epic description using GPT-4."""
+        prompt = f"""Generate a detailed epic description for a software development project with the following context:
 
-Objectives:
-{chr(10).join(f'- {obj}' for obj in initiative['objectives'])}
+Initiative: {initiative['description']}
+Feature: {feature}
+Team Focus Areas: {', '.join(team_focus)}
+Objectives: {', '.join(initiative['objectives'])}
+Success Metrics: {', '.join(initiative['success_metrics'])}
 
-Success Metrics:
-{chr(10).join(f'- {metric}' for metric in initiative['success_metrics'])}
+Please include:
+1. Background and context
+2. Feature focus and current pain points
+3. Objectives and success metrics
+4. Current challenges
+5. Target users and their needs
+6. Implementation areas
+7. Technical considerations
 
-Current Challenges:
-{chr(10).join(f'- {challenge}' for challenge in scenarios['current_challenges'] if any(focus in challenge.lower() for focus in team_focus))}
+Make the description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
 
-Implementation Areas:
-{chr(10).join(f'- {area}' for area in team_focus)}
-"""
-        return description
+        return self.llm.generate_ticket_description(
+            title=f"Epic: {feature}",
+            ticket_type="Epic",
+            prompt=prompt
+        )
 
-    def _generate_story_description(self, feature, scenarios, team_focus, tech_stack):
-        """Generate a detailed user story description."""
-        # Find relevant persona
-        persona = random.choice(scenarios['user_personas'])
-        
-        description = f"""As a {persona['role']},
-I want to {feature.lower()}
-So that I can {random.choice(persona['needs']).lower()}
+    def _generate_story_description(self, feature, scenarios, team_focus, tech_stack, initiative=None, specific_feature=None, persona=None):
+        """Generate a detailed story description using GPT-4."""
+        prompt = f"""Generate a detailed story description for a software development project with the following context:
 
-Background:
-This story is part of our efforts to enhance {random.choice(team_focus)}.
-It aligns with our platform's {random.choice(scenarios['key_features'])} capabilities.
+Feature: {feature}
+Specific Feature: {specific_feature}
+Team Focus Areas: {', '.join(team_focus)}
+Tech Stack: {', '.join(tech_stack)}
+Persona: {persona['role']} - {', '.join(persona['needs'])}
+Initiative: {initiative['description'] if initiative else 'None'}
 
-Technical Context:
-- Technology stack: {', '.join(tech_stack)}
-- Integration points: {random.choice(scenarios['key_features'])}
-- Performance requirements: Response time < 500ms
+Please include:
+1. User story format (As a... I want... So that...)
+2. Feature context
+3. Technical context
+4. Detailed acceptance criteria
+5. Technical requirements
+6. Performance requirements
+7. Security requirements
+8. Testing requirements
 
-Acceptance Criteria:
-1. Feature is implemented according to design specifications
-2. Unit tests achieve > 80% coverage
-3. Integration tests pass successfully
-4. Performance metrics meet requirements
-5. Documentation is updated
+Make the description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
 
-Technical Notes:
-- Consider using {random.choice(tech_stack)} best practices
-- Ensure error handling follows platform standards
-- Add monitoring and logging
-"""
-        return description
+        return self.llm.generate_ticket_description(
+            title=f"Story: {feature}",
+            ticket_type="Story",
+            prompt=prompt
+        )
 
-    def _generate_bug_description(self, scenarios, team_focus, tech_stack):
-        """Generate a realistic bug description."""
-        feature = random.choice(scenarios['key_features'])
-        
-        description = f"""Issue Summary:
-Users are experiencing issues with {feature} when performing {random.choice(team_focus)} operations.
+    def _generate_bug_description(self, scenarios, team_focus, tech_stack, feature):
+        """Generate a realistic bug description using GPT-4."""
+        prompt = f"""Generate a detailed bug report for a software development project with the following context:
 
-Impact:
-- Severity: {random.choice(['High', 'Medium', 'Low'])}
-- Affected users: {random.choice(['All users', 'Process Managers', 'Department Heads', 'End Users'])}
-- Business impact: {random.choice(['Workflow delays', 'Data processing errors', 'User experience degradation'])}
+Feature: {feature}
+Team Focus Areas: {', '.join(team_focus)}
+Tech Stack: {', '.join(tech_stack)}
 
-Steps to Reproduce:
-1. Navigate to {feature} section
-2. Attempt to perform {random.choice(team_focus)}
-3. Observe error in system response
+Please include:
+1. Issue summary and impact
+2. Detailed steps to reproduce
+3. Expected behavior
+4. Current behavior
+5. Technical context
+6. Proposed solution
+7. Additional notes
 
-Expected Behavior:
-The operation should complete successfully and update the system state.
+Make the bug report detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
 
-Current Behavior:
-The operation fails with {random.choice(['timeout', 'validation error', 'system error'])}.
+        return self.llm.generate_ticket_description(
+            title=f"Bug: {feature}",
+            ticket_type="Bug",
+            prompt=prompt
+        )
 
-Technical Context:
-- Affected component: {random.choice(tech_stack)}
-- Related services: {', '.join(random.sample(tech_stack, min(2, len(tech_stack))))}
-- Error logs attached
+    def _generate_task_description(self, improvement, scenarios, team_focus, tech_stack, feature):
+        """Generate a detailed technical task description using GPT-4."""
+        prompt = f"""Generate a detailed technical task description for a software development project with the following context:
 
-Proposed Solution:
-Investigate and fix the issue in the {random.choice(tech_stack)} component while ensuring proper error handling and logging.
-"""
-        return description
+Improvement: {improvement}
+Feature: {feature}
+Team Focus Areas: {', '.join(team_focus)}
+Tech Stack: {', '.join(tech_stack)}
 
-    def _generate_task_description(self, improvement, scenarios, team_focus, tech_stack):
-        """Generate a detailed technical task description."""
-        description = f"""Technical Task Summary:
-Implement {improvement} for the {random.choice(team_focus)} component.
+Please include:
+1. Technical task summary
+2. Context and background
+3. Technical requirements
+4. Performance requirements
+5. Implementation notes
+6. Dependencies
+7. Testing requirements
+8. Documentation requirements
+9. Review requirements
 
-Context:
-This task is part of our ongoing efforts to improve {random.choice(scenarios['key_features'])}.
+Make the task description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
 
-Technical Requirements:
-1. Use {random.choice(tech_stack)} for implementation
-2. Follow team's coding standards
-3. Add appropriate logging and monitoring
-4. Update technical documentation
-
-Implementation Notes:
-- Consider impact on {random.choice(team_focus)}
-- Ensure backward compatibility
-- Add necessary test coverage
-- Update deployment scripts if needed
-
-Dependencies:
-- {random.choice(tech_stack)} environment
-- Access to {random.choice(scenarios['key_features'])} API
-"""
-        return description 
+        return self.llm.generate_ticket_description(
+            title=f"Task: {improvement}",
+            ticket_type="Task",
+            prompt=prompt
+        ) 

@@ -18,26 +18,31 @@ class LLMGenerator:
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.api_key)
 
-    def generate_ticket_description(self, title: str, ticket_type: str, component: str) -> str:
+    def generate_ticket_description(self, title: str, ticket_type: str, component: str, prompt: str = None) -> str:
         """Generate a realistic ticket description based on the title and type."""
-        prompt = f"""Generate a detailed, realistic ticket description for a software development task with the following details:
-        Title: {title}
-        Type: {ticket_type}
-        Component: {component}
-        
-        The description should include:
-        1. Background/Context
-        2. Current Behavior (if applicable)
-        3. Required Changes/Implementation Details
-        4. Acceptance Criteria
-        
-        Format the response in markdown."""
+        if prompt:
+            system_prompt = "You are a technical writer creating detailed software development tickets."
+            user_prompt = prompt
+        else:
+            system_prompt = "You are a technical writer creating detailed software development tickets."
+            user_prompt = f"""Generate a detailed, realistic ticket description for a software development task with the following details:
+            Title: {title}
+            Type: {ticket_type}
+            Component: {component}
+            
+            The description should include:
+            1. Background/Context
+            2. Current Behavior (if applicable)
+            3. Required Changes/Implementation Details
+            4. Acceptance Criteria
+            
+            Format the response in markdown."""
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a technical writer creating detailed software development tickets."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
             max_tokens=500
@@ -388,4 +393,92 @@ Please provide a helpful and constructive review comment that:
                f"Agenda:\n" + \
                f"1. Introduction and Updates\n" + \
                f"2. Discussion Points\n" + \
-               f"3. Action Items and Next Steps" 
+               f"3. Action Items and Next Steps"
+
+    def extract_acceptance_criteria(self, content: str) -> List[str]:
+        """Extract acceptance criteria from the generated content."""
+        prompt = f"""Extract the acceptance criteria from the following ticket description. Return them as a list of strings, one per line.
+
+Content:
+{content}
+
+Return only the list of acceptance criteria, one per line, without any additional text or formatting."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer extracting acceptance criteria from ticket descriptions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200
+        )
+        
+        criteria = response.choices[0].message.content.strip().split('\n')
+        return [c.strip() for c in criteria if c.strip()]
+
+    def extract_user_persona(self, content: str) -> str:
+        """Extract the user persona from the generated content."""
+        prompt = f"""Extract the user persona from the following ticket description. Return only the role of the user (e.g., "Developer", "Product Manager", "End User").
+
+Content:
+{content}
+
+Return only the user role, without any additional text or formatting."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer extracting user personas from ticket descriptions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=50
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def extract_estimated_hours(self, content: str) -> float:
+        """Extract the estimated hours from the generated content."""
+        prompt = f"""Extract the estimated hours from the following ticket description. Return only the number of hours as a float.
+
+Content:
+{content}
+
+Return only the number of hours, without any additional text or formatting."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer extracting estimated hours from ticket descriptions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=10
+        )
+        
+        try:
+            return float(response.choices[0].message.content.strip())
+        except ValueError:
+            return 4.0  # Default value if extraction fails
+
+    def extract_technical_details(self, content: str) -> str:
+        """Extract technical details from the generated content."""
+        prompt = f"""Extract the technical details and implementation notes from the following ticket description.
+
+Content:
+{content}
+
+Return only the technical details and implementation notes, without any additional text or formatting."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer extracting technical details from ticket descriptions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200
+        )
+        
+        return response.choices[0].message.content.strip() 

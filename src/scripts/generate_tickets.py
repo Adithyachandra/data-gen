@@ -5,9 +5,20 @@ from pathlib import Path
 from src.config.sample_company import INNOVATECH_CONFIG
 from src.generators.ticket_generator import TicketGenerator
 from src.scripts.generate_teams import generate_teams
+from src.models.ticket import Component
 
-def generate_tickets(teams=None, team_members=None, output_dir: str = "generated_data", num_sprints: int = 3):
-    """Generate tickets and sprints for all teams."""
+def generate_tickets(teams=None, team_members=None, output_dir: str = "generated_data", num_sprints: int = 1, tickets_per_sprint: int = None, team_name: str = None, product_initiative: str = None):
+    """Generate tickets and sprints for all teams.
+    
+    Args:
+        teams: Dictionary of teams
+        team_members: Dictionary of team members
+        output_dir: Directory to save generated data
+        num_sprints: Number of sprints to generate per team (default: 1)
+        tickets_per_sprint: Target number of tickets to generate per sprint. If None, uses default generation logic.
+        team_name: Name of the team to generate tickets for. If None, generates for all teams.
+        product_initiative: Name of the product initiative to focus on. If None, uses random initiatives.
+    """
     print("Starting ticket data generation...")
     
     # If teams and members not provided, generate them
@@ -17,12 +28,23 @@ def generate_tickets(teams=None, team_members=None, output_dir: str = "generated
     # Initialize generator
     generator = TicketGenerator(team_members, teams, INNOVATECH_CONFIG)
     
+    # Set product initiative if specified
+    if product_initiative:
+        generator.set_product_initiative(product_initiative)
+    
     # Storage for generated data
     tickets = {}
     sprints = {}
     
+    # Filter teams if team_name is specified
+    target_teams = {name: team for name, team in teams.items() if team.name == team_name} if team_name else teams
+    
+    if not target_teams:
+        print(f"No team found with name: {team_name}")
+        return tickets, sprints
+    
     # Generate tickets for each team
-    for team in teams.values():
+    for team in target_teams.values():
         print(f"Generating tickets and sprints for team {team.name}...")
         
         # Generate sprints
@@ -39,7 +61,19 @@ def generate_tickets(teams=None, team_members=None, output_dir: str = "generated
         
         # Generate tickets for each sprint
         for sprint in team_sprints:
-            component = team.components[0] if team.components else "FRONTEND"
+            # Convert component string to enum value
+            component_str = team.components[0] if team.components else "FRONTEND"
+            component = Component[component_str.upper()]  # Convert string to enum value
+            
+            # If tickets_per_sprint is specified, adjust the generator's parameters
+            if tickets_per_sprint is not None:
+                # Calculate number of stories based on tickets_per_sprint
+                # Assuming 2-4 tasks per story and 1-3 subtasks per task
+                num_stories = max(1, tickets_per_sprint // 8)  # Rough estimate
+                generator.stories_per_sprint = num_stories
+                generator.tasks_per_story = max(1, tickets_per_sprint // (num_stories * 3))
+                generator.subtasks_per_task = max(1, tickets_per_sprint // (num_stories * generator.tasks_per_story * 2))
+            
             sprint_tickets = generator.generate_sprint_tickets(sprint, component)
             
             # Store tickets
@@ -74,8 +108,10 @@ def generate_tickets(teams=None, team_members=None, output_dir: str = "generated
             )
     
     print("\nTicket Generation Summary:")
-    print(f"Sprints: {len(sprints)}")
-    print(f"Tickets: {len(tickets)}")
+    print(f"Total Tickets: {len(tickets)}")
+    print(f"Total Sprints: {len(sprints)}")
+    if product_initiative:
+        print(f"Product Initiative: {product_initiative}")
     print(f"\nData saved to {output_dir}")
     
     return tickets, sprints
