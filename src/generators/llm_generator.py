@@ -61,7 +61,7 @@ class LLMGenerator:
         The message should sound natural and professional."""
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a software development team member writing a message in a team chat."},
                 {"role": "user", "content": prompt}
@@ -87,7 +87,7 @@ class LLMGenerator:
         Format the response in markdown."""
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a technical team member documenting meeting notes."},
                 {"role": "user", "content": prompt}
@@ -106,88 +106,22 @@ class LLMGenerator:
         duration_minutes: int
     ) -> str:
         """Generate a realistic meeting transcript."""
-        # Calculate number of segments based on duration
-        num_segments = max(3, duration_minutes // 5)  # One segment every 5 minutes
-        
-        meeting_structure = {
-            "Daily Standup": {
-                "phases": ["Updates from each team member", "Blockers discussion", "Quick follow-ups"],
-                "dynamics": ["Quick round-robin updates", "Brief blocker resolution", "Next-day planning"]
-            },
-            "Sprint Planning": {
-                "phases": ["Sprint Goal Discussion", "Capacity Planning", "Backlog Review", "Story Point Estimation", "Sprint Commitment"],
-                "dynamics": ["Goal clarification", "Detailed story discussions", "Technical feasibility debates", "Team commitment"]
-            },
-            "Sprint Review": {
-                "phases": ["Sprint Goal Recap", "Demo Preparations", "Feature Demonstrations", "Feedback Collection", "Next Sprint Preview"],
-                "dynamics": ["Demo presentations", "Stakeholder questions", "Technical explanations", "Future planning"]
-            },
-            "Sprint Retrospective": {
-                "phases": ["Previous Action Items Review", "What Went Well", "What Needs Improvement", "Action Items Creation"],
-                "dynamics": ["Open sharing", "Constructive criticism", "Solution brainstorming", "Commitment to change"]
-            },
-            "Technical Discussion": {
-                "phases": ["Problem Statement", "Current Architecture Review", "Proposed Solutions", "Trade-offs Discussion", "Decision Making"],
-                "dynamics": ["Technical deep-dives", "Architecture discussions", "Code review insights", "Best practices debate"]
-            }
-        }
-
-        structure = meeting_structure.get(meeting_type, {
-            "phases": ["Introduction", "Main Discussion", "Action Items"],
-            "dynamics": ["General discussion", "Decision making", "Next steps"]
-        })
-
-        prompt = f"""Generate a detailed, realistic transcript for a {meeting_type} meeting with the following details:
+        prompt = f"""Generate a realistic transcript for a {meeting_type} meeting with the following details:
         Duration: {duration_minutes} minutes
         Attendees: {', '.join(attendees)}
         Topics: {', '.join(topics)}
         
-        Meeting Structure:
-        - Phases: {', '.join(structure['phases'])}
-        - Expected Dynamics: {', '.join(structure['dynamics'])}
+        The transcript should:
+        1. Show natural conversation flow
+        2. Include technical discussions
+        3. Show different speaking styles
+        4. Include action items and decisions
+        5. Be formatted as a conversation with timestamps
         
-        The transcript should include:
-        1. Realistic meeting flow with:
-           - Natural opening and closing segments
-           - Transitions between topics
-           - Side discussions and clarifications
-           - Technical terminology appropriate for a software team
-        
-        2. Participant interactions showing:
-           - Different communication styles
-           - Technical discussions and debates
-           - Question-answer exchanges
-           - Agreement and disagreement patterns
-           - Decision-making processes
-        
-        3. Time-based progression:
-           - Regular timestamps (every 5-10 minutes)
-           - Realistic pacing of discussions
-           - Time management indicators
-           - Natural breaks and transitions
-        
-        4. Meeting-specific elements:
-           - Role-appropriate contributions
-           - Technical details and explanations
-           - Action item assignments
-           - Follow-up scheduling
-        
-        5. Realistic dialogue features:
-           - Interruptions and overlapping discussions
-           - Clarifying questions
-           - Technical term explanations
-           - References to code, systems, or documentation
-           - Links to relevant resources or tickets
-        
-        Format the transcript in markdown with:
-        - Clear timestamps
-        - Speaker names in bold
-        - Code snippets in code blocks
-        - Important decisions or action items highlighted
-        - Links to referenced materials"""
+        Format the response in markdown."""
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {
                     "role": "system",
@@ -224,7 +158,7 @@ Please provide a helpful and constructive review comment that:
 """
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=200
@@ -299,7 +233,7 @@ Please provide a helpful and constructive review comment that:
         Return only the title, no additional text."""
         
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=50
