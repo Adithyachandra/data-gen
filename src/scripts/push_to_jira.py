@@ -56,98 +56,79 @@ def create_sprint(jira: JIRA, sprint_data: Dict[str, Any]) -> str:
         print(f"Error creating sprint {sprint_data['name']}: {str(e)}")
         raise
 
-def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets: Dict[str, str], reporter: str, assignee: str) -> str:
-    """Create a ticket in JIRA with the given data."""
-    # Map ticket types to JIRA issue types
-    issue_type_map = {
-        "Epic": "Epic",
-        "Story": "Story",
-        "Task": "Task",
-        "Bug": "Bug",
-        "Subtask": "Subtask"
-    }
-    
-    # Prepare the description with acceptance criteria if they exist
-    description = ticket_data["description"]
-    if ticket_data.get("acceptance_criteria"):
-        description += "\n\n## Acceptance Criteria\n"
-        for criterion in ticket_data["acceptance_criteria"]:
-            description += f"* {criterion}\n"
-    
-    # Prepare the issue fields with only essential fields
+def create_jira_ticket(ticket_data, jira, project_key, fix_version, sprint, created_tickets):
+    """Create a JIRA ticket with the given data."""
     issue_fields = {
-        "project": {"key": os.getenv("JIRA_PROJECT_KEY")},
-        "summary": ticket_data["summary"],
-        "description": description,
-        "issuetype": {"name": issue_type_map.get(ticket_data["type"], "Task")},
-        "labels": ticket_data["labels"]
+        'project': {'key': project_key},
+        'summary': ticket_data['summary'],
+        'description': ticket_data['description'],
+        'issuetype': {'name': 'Task'},  # Default to Task
     }
-    
-    # Add story points if they exist (for all ticket types)
-    if ticket_data.get("story_points") is not None:
-        issue_fields["customfield_10016"] = ticket_data["story_points"]  # Story Point Estimate field
-    
-    # Handle parent relationships
-    if ticket_data.get("parent_ticket") and ticket_data.get("parent_ticket") in created_tickets:
-        # For subtasks and tasks under stories
-        parent_key = created_tickets[ticket_data["parent_ticket"]]
-        issue_fields["parent"] = {"key": parent_key}
-    elif ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
-        # For stories under epics
-        epic_key = created_tickets[ticket_data["epic_link"]]
-        issue_fields["customfield_10014"] = epic_key  # Epic Link field
-    
+
+    # Add fix version if provided
+    if fix_version:
+        issue_fields['fixVersions'] = [{'name': fix_version}]
+
+    # Add sprint if provided
+    if sprint:
+        issue_fields['customfield_10016'] = sprint
+
+    # Map ticket types to JIRA issue type names
+    issue_type_map = {
+        'Epic': 'Epic',
+        'Story': 'Story',
+        'Task': 'Task',
+        'Sub-task': 'Subtask',  # Using the exact name from JIRA
+        'Bug': 'Bug'
+    }
+
+    # Set the correct issue type
+    if ticket_data['type'] in issue_type_map:
+        issue_fields['issuetype'] = {'name': issue_type_map[ticket_data['type']]}
+
+    # Handle parent relationships for subtasks
+    if ticket_data.get('parent_ticket'):
+        parent_key = created_tickets.get(ticket_data['parent_ticket'])
+        if parent_key:
+            issue_fields['parent'] = {'key': parent_key}
+        else:
+            print(f"Warning: Parent ticket {ticket_data['parent_ticket']} not found for subtask {ticket_data['id']}")
+            return None  # Skip creating the subtask if parent is not found
+
     # Create the issue
     try:
-        issue = jira.create_issue(fields=issue_fields)
-        print(f"Created {ticket_data['type']} {issue.key} from {ticket_data['id']}")
-        
-        # Create Relates link for Tasks to their parent Stories
-        if ticket_data["type"] == "Task" and ticket_data.get("parent_ticket") and ticket_data.get("parent_ticket") in created_tickets:
-            parent_key = created_tickets[ticket_data["parent_ticket"]]
-            try:
-                jira.create_issue_link(
-                    type="Relates",
-                    inwardIssue=issue.key,
-                    outwardIssue=parent_key
-                )
-                print(f"Created Relates link: {issue.key} relates to {parent_key}")
-            except Exception as e:
-                print(f"Warning: Could not create Relates link between {issue.key} and {parent_key}: {str(e)}")
-        
-        # Update relationships after creation
-        if ticket_data.get("depends_on"):
-            for dep_id in ticket_data["depends_on"]:
-                if dep_id in created_tickets:
-                    dep_key = created_tickets[dep_id]
+        new_issue = jira.create_issue(fields=issue_fields)
+        print(f"Created {ticket_data['type']} {ticket_data['id']} as {new_issue.key}")
+
+        # Create issue links for dependencies and blocks
+        if ticket_data.get('depends_on'):
+            for dependency in ticket_data['depends_on']:
+                if dependency in created_tickets:
                     try:
                         jira.create_issue_link(
-                            type="Depends",
-                            inwardIssue=issue.key,
-                            outwardIssue=dep_key
+                            type='Depends',
+                            inwardIssue=new_issue.key,
+                            outwardIssue=created_tickets[dependency]
                         )
-                        print(f"Created dependency link: {issue.key} depends on {dep_key}")
                     except Exception as e:
-                        print(f"Warning: Could not create dependency link between {issue.key} and {dep_key}: {str(e)}")
-        
-        if ticket_data.get("blocks"):
-            for block_id in ticket_data["blocks"]:
-                if block_id in created_tickets:
-                    block_key = created_tickets[block_id]
+                        print(f"Error creating dependency link for {new_issue.key}: {str(e)}")
+
+        if ticket_data.get('blocks'):
+            for blocked in ticket_data['blocks']:
+                if blocked in created_tickets:
                     try:
                         jira.create_issue_link(
-                            type="Blocks",
-                            inwardIssue=issue.key,
-                            outwardIssue=block_key
+                            type='Blocks',
+                            inwardIssue=new_issue.key,
+                            outwardIssue=created_tickets[blocked]
                         )
-                        print(f"Created blocks link: {issue.key} blocks {block_key}")
                     except Exception as e:
-                        print(f"Warning: Could not create blocks link between {issue.key} and {block_key}: {str(e)}")
-        
-        return issue.key
+                        print(f"Error creating blocks link for {new_issue.key}: {str(e)}")
+
+        return new_issue.key
     except Exception as e:
         print(f"Error creating {ticket_data['type']} {ticket_data['id']}: {str(e)}")
-        raise
+        return None
 
 def main():
     # Parse command line arguments
@@ -195,46 +176,71 @@ def main():
     
     # First, create all Epic tickets
     created_tickets = {}
+    print("\nProcessing Epic tickets...")
     for ticket_data in tickets:
         if ticket_data["type"] == "Epic":
             try:
-                jira_key = create_jira_ticket(jira, ticket_data, created_tickets, jira_username, jira_username)
-                created_tickets[ticket_data["id"]] = jira_key
-                print(f"Created Epic {jira_key} from {ticket_data['id']}")
+                # Get fix version and sprint if they exist
+                fix_version = None
+                if ticket_data.get("fix_versions") and ticket_data["fix_versions"]:
+                    fix_version = created_versions[ticket_data["fix_versions"][0]]
+
+                sprint = None
+                if ticket_data.get("sprint_id") and ticket_data["sprint_id"] in created_sprints:
+                    sprint = created_sprints[ticket_data["sprint_id"]]
+
+                jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
+                                            fix_version, sprint, created_tickets)
+                if jira_key:
+                    created_tickets[ticket_data["id"]] = jira_key
+                    print(f"Created Epic {jira_key} from {ticket_data['id']}")
             except Exception as e:
                 print(f"Error creating Epic {ticket_data['id']}: {str(e)}")
     
-    # Then create all other tickets
+    # Then create all Story and Task tickets
+    print("\nProcessing Story and Task tickets...")
     for ticket_data in tickets:
-        if ticket_data["type"] != "Epic":
+        if ticket_data["type"] in ["Story", "Task"]:
             try:
-                jira_key = create_jira_ticket(jira, ticket_data, created_tickets, jira_username, jira_username)
-                created_tickets[ticket_data["id"]] = jira_key
-                print(f"Created {ticket_data['type']} {jira_key} from {ticket_data['id']}")
-                
-                # Assign ticket to sprint if it has one
+                # Get fix version and sprint if they exist
+                fix_version = None
+                if ticket_data.get("fix_versions") and ticket_data["fix_versions"]:
+                    fix_version = created_versions[ticket_data["fix_versions"][0]]
+
+                sprint = None
                 if ticket_data.get("sprint_id") and ticket_data["sprint_id"] in created_sprints:
-                    try:
-                        jira.add_issues_to_sprint(created_sprints[ticket_data["sprint_id"]], [jira_key])
-                        print(f"Added ticket {jira_key} to sprint {ticket_data['sprint_id']}")
-                    except Exception as e:
-                        print(f"Warning: Could not add ticket {jira_key} to sprint {ticket_data['sprint_id']}: {str(e)}")
-                
-                # Assign ticket to fix version if it has one
-                if ticket_data.get("fix_versions"):
-                    for version_id in ticket_data["fix_versions"]:
-                        if version_id in created_versions:
-                            try:
-                                # Get the version object
-                                version = jira.version(created_versions[version_id])
-                                # Add the version to the issue's fix versions
-                                issue = jira.issue(jira_key)
-                                current_versions = issue.fields.fixVersions
-                                current_versions.append({"id": version.id})
-                                issue.update(fields={"fixVersions": current_versions})
-                                print(f"Added ticket {jira_key} to fix version {version_id}")
-                            except Exception as e:
-                                print(f"Warning: Could not add ticket {jira_key} to fix version {version_id}: {str(e)}")
+                    sprint = created_sprints[ticket_data["sprint_id"]]
+
+                jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
+                                            fix_version, sprint, created_tickets)
+                if jira_key:
+                    created_tickets[ticket_data["id"]] = jira_key
+                    print(f"Created {ticket_data['type']} {jira_key} from {ticket_data['id']}")
+            except Exception as e:
+                print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
+    
+    # Finally, create all Subtask tickets
+    print("\nProcessing Subtask tickets...")
+    for ticket_data in tickets:
+        if ticket_data["type"] == "Sub-task":
+            print(f"Found subtask {ticket_data['id']} with parent {ticket_data.get('parent_ticket')}")
+            try:
+                # Get fix version and sprint if they exist
+                fix_version = None
+                if ticket_data.get("fix_versions") and ticket_data["fix_versions"]:
+                    fix_version = created_versions[ticket_data["fix_versions"][0]]
+
+                sprint = None
+                if ticket_data.get("sprint_id") and ticket_data["sprint_id"] in created_sprints:
+                    sprint = created_sprints[ticket_data["sprint_id"]]
+
+                jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
+                                            fix_version, sprint, created_tickets)
+                if jira_key:
+                    created_tickets[ticket_data["id"]] = jira_key
+                    print(f"Created Subtask {jira_key} from {ticket_data['id']}")
+                else:
+                    print(f"Failed to create subtask {ticket_data['id']}")
             except Exception as e:
                 print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
     
