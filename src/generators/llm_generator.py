@@ -6,7 +6,7 @@ import json
 from dotenv import load_dotenv
 
 class LLMGenerator:
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, config=None):
         # Load environment variables from .env file
         load_dotenv()
         
@@ -17,6 +17,9 @@ class LLMGenerator:
         
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.api_key)
+        
+        # Store config
+        self.config = config or {}
 
     def generate_ticket_description(self, title: str, ticket_type: str, component: str, prompt: str = None) -> str:
         """Generate a realistic ticket description based on the title and type."""
@@ -439,39 +442,35 @@ Please provide a helpful and constructive review comment that:
 
     def generate_story(self, component: str, parent_epic: str = None) -> str:
         """Generate a user story description using GPT-4"""
-        prompt = f"""Generate a concise user story for a {component} component in the context of {self.config['company_name']}, a {self.config['industry']} company.
+        company_name = self.config.get('company', {}).get('name', 'the company')
+        industry = self.config.get('company', {}).get('industry', 'tech')
+        
+        prompt = f"""Generate a concise user story for a {component} component in the context of {company_name}, a {industry} company.
         The story should be part of the epic: {parent_epic}
 
-        Format the story exactly as follows:
+        Return EXACTLY in this format with NO headers, NO additional content, and NO markdown formatting:
+
         As a [user type]
         I want to [action]
         So that [benefit]
 
-        Acceptance Criteria:
-        1. [First criterion]
-        2. [Second criterion]
-        3. [Third criterion]
+        1. [First acceptance criterion]
+        2. [Second acceptance criterion]
+        3. [Third acceptance criterion]
 
-        Story Points: [1, 2, 3, 5, 8, 13]
+        Story Points: [number]
 
-        Additional Context:
-        - Company: {self.config['company_name']}
-        - Industry: {self.config['industry']}
-        - Product: {self.config['product']}
-        - Initiative: {self.config['initiative']}
-        - Component: {component}
-
-        Keep the story focused and concise. The story points should reflect the complexity and effort required.
+        Do not include ANY other text, sections, or formatting. The output should be exactly as shown above, with real content replacing the bracketed placeholders.
         """
         
         response = self.client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a product owner creating user stories. Keep stories concise and focused on user value."},
+                {"role": "system", "content": "You are a product owner creating user stories. Return ONLY the exact format specified with no additional content, headers, or formatting."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=500
+            max_tokens=300
         )
         
         return response.choices[0].message.content.strip()

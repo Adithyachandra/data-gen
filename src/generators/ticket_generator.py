@@ -46,7 +46,7 @@ class TicketGenerator:
         self.duplicate_probability = 0.15  # 15% chance of duplicate tickets
         self.implements_probability = 0.2  # 20% chance of implementation relationships
 
-        self.llm = LLMGenerator()
+        self.llm = LLMGenerator(config=config)
 
     def _generate_fix_versions(self) -> Dict[str, FixVersion]:
         """Generate fix versions for the project."""
@@ -164,53 +164,28 @@ class TicketGenerator:
         # Select story owner
         story_owner = random.choice(list(self.team_members.values()))
         
-        # Find the product and initiative in the config
-        product = None
-        initiative = None
-        if self.current_initiative:
-            for p in self.config['products']:
-                for i in p['initiatives']:
-                    if i['name'] == self.current_initiative:
-                        product = p
-                        initiative = i
-                        break
-                if product:
-                    break
+        # Generate story content using the simpler format
+        story_content = self.llm.generate_story(component.value, epic.summary)
         
-        # Generate story content using GPT-4 with context
-        prompt = f"""Generate a detailed story description for a software development project with the following context:
-        Company: {self.config['company']['name']}
-        Industry: {self.config['company']['industry']}
-        Product: {product['name'] if product else 'Not specified'}
-        Initiative: {initiative['name'] if initiative else 'Not specified'}
-        Component: {component.value}
-        Epic: {epic.summary}
+        # Parse the content to extract acceptance criteria
+        lines = story_content.strip().split('\n')
+        acceptance_criteria = []
+        user_persona = ""
+        story_points = 5
         
-        The story should:
-        1. Follow user story format (As a... I want... So that...)
-        2. Align with the epic's goals
-        3. Support the product initiative
-        4. Include detailed acceptance criteria
-        5. Consider technical requirements
-        6. Include performance and security considerations
-        7. Define testing requirements
-        8. Specify user personas and needs
+        for i, line in enumerate(lines):
+            if line.startswith('As a '):
+                user_persona = line[5:].strip()
+            elif line.startswith('1.') or line.startswith('2.') or line.startswith('3.'):
+                acceptance_criteria.append(line[2:].strip())
+            elif line.startswith('Story Points:'):
+                try:
+                    story_points = int(line.split(':')[1].strip())
+                except (ValueError, IndexError):
+                    story_points = 5
         
-        Format the response in markdown."""
-        
-        story_content = self.llm.generate_ticket_description(
-            title=f"Story: Implement {component.value} Feature",
-            ticket_type="Story",
-            component=component.value,
-            prompt=prompt
-        )
-        
-        # Generate summary from description
-        summary = self.llm.generate_summary(story_content, "Story", component.value)
-        
-        # Parse the generated content to extract acceptance criteria and user persona
-        acceptance_criteria = self.llm.extract_acceptance_criteria(story_content)
-        user_persona = self.llm.extract_user_persona(story_content)
+        # Generate summary from the first line (As a...)
+        summary = lines[0] + ' ' + lines[1] + ' ' + lines[2]
         
         story = Story(
             id=story_id,
@@ -224,7 +199,7 @@ class TicketGenerator:
             components=[component],
             created_at=datetime.now() - timedelta(days=random.randint(15, 45)),
             updated_at=datetime.now() - timedelta(days=random.randint(1, 15)),
-            story_points=5,
+            story_points=story_points,
             acceptance_criteria=acceptance_criteria,
             user_persona=user_persona
         )
