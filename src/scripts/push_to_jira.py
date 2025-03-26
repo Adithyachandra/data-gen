@@ -195,22 +195,22 @@ def main():
     
     # First, create all Epic tickets
     created_tickets = {}
-    for ticket_id, ticket_data in tickets.items():
+    for ticket_data in tickets:
         if ticket_data["type"] == "Epic":
             try:
                 jira_key = create_jira_ticket(jira, ticket_data, created_tickets, jira_username, jira_username)
-                created_tickets[ticket_id] = jira_key
-                print(f"Created Epic {jira_key} from {ticket_id}")
+                created_tickets[ticket_data["id"]] = jira_key
+                print(f"Created Epic {jira_key} from {ticket_data['id']}")
             except Exception as e:
-                print(f"Error creating Epic {ticket_id}: {str(e)}")
+                print(f"Error creating Epic {ticket_data['id']}: {str(e)}")
     
     # Then create all other tickets
-    for ticket_id, ticket_data in tickets.items():
+    for ticket_data in tickets:
         if ticket_data["type"] != "Epic":
             try:
                 jira_key = create_jira_ticket(jira, ticket_data, created_tickets, jira_username, jira_username)
-                created_tickets[ticket_id] = jira_key
-                print(f"Created ticket {jira_key} from {ticket_id}")
+                created_tickets[ticket_data["id"]] = jira_key
+                print(f"Created {ticket_data['type']} {jira_key} from {ticket_data['id']}")
                 
                 # Assign ticket to sprint if it has one
                 if ticket_data.get("sprint_id") and ticket_data["sprint_id"] in created_sprints:
@@ -236,7 +236,7 @@ def main():
                             except Exception as e:
                                 print(f"Warning: Could not add ticket {jira_key} to fix version {version_id}: {str(e)}")
             except Exception as e:
-                print(f"Error creating ticket {ticket_id}: {str(e)}")
+                print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
     
     # Save mapping of generated tickets to JIRA tickets
     mapping_file = os.path.join(args.input_dir, "jira_mapping.json")
