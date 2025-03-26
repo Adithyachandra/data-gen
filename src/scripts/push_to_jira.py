@@ -145,14 +145,6 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         print(f"Error creating {ticket_data['type']} {ticket_data['id']}: {str(e)}")
         raise
 
-def get_available_fields(jira: JIRA) -> None:
-    """Print all available fields in the JIRA project."""
-    fields = jira.fields()
-    print("\nAvailable JIRA Fields:")
-    for field in fields:
-        if field.get('custom', False):
-            print(f"Field ID: {field['id']}, Name: {field['name']}")
-
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Push generated data to JIRA')
@@ -173,9 +165,6 @@ def main():
     
     # Initialize JIRA client
     jira = JIRA(server=jira_url, basic_auth=(jira_username, jira_api_token))
-    
-    # Print available fields to find the correct story points field ID
-    get_available_fields(jira)
     
     # Load generated data from the specified directory
     tickets = load_data(os.path.join(args.input_dir, "tickets.json"))
