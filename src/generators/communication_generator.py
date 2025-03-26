@@ -35,7 +35,17 @@ class CommunicationGenerator:
         self.threads: Dict[str, Thread] = {}
         self.meetings: Dict[str, Meeting] = {}
         self.emails: Dict[str, Email] = {}
-        self.llm = LLMGenerator()
+        self.llm = LLMGenerator(config=config)
+        
+        # Get company-specific settings from config
+        self.company_name = config.get('company', {}).get('name', 'the company')
+        self.industry = config.get('company', {}).get('industry', 'tech')
+        self.work_hours = config.get('work_hours', {'start': '09:00', 'end': '17:00'})
+        self.communication_style = config.get('communication_style', {
+            'formal': 0.3,
+            'casual': 0.5,
+            'technical': 0.2
+        })
         
         # Communication patterns
         self.message_frequency = {

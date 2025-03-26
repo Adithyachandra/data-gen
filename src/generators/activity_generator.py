@@ -19,13 +19,23 @@ class ActivityGenerator:
         self,
         team_members: Dict[str, TeamMember],
         teams: Dict[str, Team],
-        config=INNOVATECH_CONFIG
+        config: dict
     ):
-        self.config = config
         self.team_members = team_members
         self.teams = teams
+        self.config = config
         self.activities: Dict[str, Activity] = {}
-        self.llm = LLMGenerator()
+        self.llm = LLMGenerator(config=config)
+        
+        # Get company-specific settings from config
+        self.company_name = config.get('company', {}).get('name', 'the company')
+        self.industry = config.get('company', {}).get('industry', 'tech')
+        self.work_hours = config.get('work_hours', {'start': '09:00', 'end': '17:00'})
+        self.ticket_complexity_distribution = config.get('ticket_complexity_distribution', {
+            'low': 0.3,
+            'medium': 0.5,
+            'high': 0.2
+        })
         
         # Activity patterns
         self.activity_patterns = {

@@ -1,10 +1,16 @@
+import os
+import sys
+from pathlib import Path
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent.parent.parent)
+sys.path.insert(0, project_root)
+
 from datetime import datetime, timedelta
 import json
-from pathlib import Path
 import argparse
 import random
 import uuid
-import os
 
 from src.scripts.generate_teams import generate_teams
 from src.scripts.generate_tickets import generate_tickets
@@ -12,6 +18,11 @@ from src.scripts.generate_communication import generate_communication
 from src.models.fix_version import FixVersion
 from src.models.ticket import Sprint, SprintStatus
 from src.generators.utils import generate_id
+
+def load_company_config(config_file: str) -> dict:
+    """Load company configuration from JSON file."""
+    with open(config_file, 'r') as f:
+        return json.load(f)
 
 def create_default_sprint_and_release(teams, output_dir):
     """Create a default sprint and release for the generated tickets."""
@@ -32,7 +43,7 @@ def create_default_sprint_and_release(teams, output_dir):
     sprint = Sprint(
         id=f"SPR{uuid.uuid4().hex[:8]}",
         name="Sprint 1",
-        goal="Complete initial set of Enterprise Workflow Automation features",
+        goal="Complete initial set of features",
         description="Initial sprint for core features",
         start_date=sprint_start,
         end_date=sprint_start + timedelta(days=14),
@@ -72,8 +83,15 @@ def main():
                       help="Name of the team to generate tickets for. If not specified, generates for all teams.")
     parser.add_argument("--product-initiative", type=str, default=None,
                       help="Name of the product initiative to focus on. If not specified, uses random initiatives.")
+    parser.add_argument("--config-file", type=str, required=True,
+                      help="Path to the company configuration JSON file")
     
     args = parser.parse_args()
+    
+    # Load company configuration
+    print("\n=== Loading Company Configuration ===")
+    company_config = load_company_config(args.config_file)
+    print(f"Loaded configuration for {company_config['company']['name']}")
     
     # Create output directory
     output_dir = Path(args.output_dir)
@@ -84,7 +102,7 @@ def main():
     team_members = None
     if args.batch in ["teams", "tickets", "communication", "all"]:
         print("\n=== Generating Team Data ===")
-        teams, team_members = generate_teams(args.output_dir)
+        teams, team_members = generate_teams(args.config_file, args.output_dir)
     
     if args.batch in ["tickets", "all"]:
         print("\n=== Generating Ticket Data ===")
@@ -93,11 +111,20 @@ def main():
         print(f"Created default sprint {sprint.id} and release {fix_version.id}")
         
         # Generate tickets with the default sprint and release
-        tickets, _ = generate_tickets(teams, team_members, args.output_dir, args.num_sprints, args.tickets_per_sprint, args.team_name, args.product_initiative)
+        tickets, _ = generate_tickets(
+            teams, 
+            team_members, 
+            args.output_dir, 
+            args.num_sprints, 
+            args.tickets_per_sprint, 
+            args.team_name, 
+            args.product_initiative,
+            company_config
+        )
     
     if args.batch in ["communication", "all"]:
         print("\n=== Generating Communication Data ===")
-        generate_communication(teams, team_members, tickets, args.output_dir)
+        generate_communication(teams, team_members, tickets, args.output_dir, company_config)
     
     print("\nData generation complete!")
 

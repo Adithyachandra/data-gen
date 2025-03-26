@@ -15,12 +15,12 @@ from src.models.communication import Message, Channel, Meeting
 from src.models.activity import Activity
 
 class CompanyDataGenerator:
-    def __init__(self, config=INNOVATECH_CONFIG):
+    def __init__(self, config: dict):
         self.config = config
         self.output_dir = Path("generated_data")
         self.output_dir.mkdir(exist_ok=True)
         
-        # Initialize generators
+        # Initialize generators with company config
         self.team_generator = TeamGenerator(config)
         self.team_members = {}
         self.teams = {}

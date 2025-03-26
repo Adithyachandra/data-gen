@@ -21,256 +21,181 @@ from src.config.sample_company import (
 )
 
 class TeamGenerator:
-    def __init__(self, config=INNOVATECH_CONFIG):
+    def __init__(self, config):
         self.config = config
         self.members: Dict[str, TeamMember] = {}
         self.teams: Dict[str, Team] = {}
         self.business_units: Dict[str, BusinessUnit] = {}
         self.company_start_date = datetime(2020, 1, 1)  # Company founded date
+        
+        # Get company-specific settings from config
+        self.company_name = config.get('company', {}).get('name', 'Acme')
+        self.industry = config.get('company', {}).get('industry', 'tech')
+        self.email_domain = f"{self.company_name.lower().replace(' ', '')}.com"
+        self.meeting_timezone = "UTC"  # Default to UTC for now
 
     def generate_organization(self) -> Dict[str, BusinessUnit]:
         """Generate the entire organizational structure."""
-        # Generate C-level executives first
-        self._generate_executive_team()
-        
-        # Generate business units and their departments
-        for bu_config in BUSINESS_UNITS:
+        # Generate business units from config
+        for bu_config in self.config.get('business_units', []):
             self._generate_business_unit(bu_config)
         
         return self.business_units
 
-    def _generate_executive_team(self):
-        """Generate C-level executives."""
-        # Create executive team
-        exec_team_id = generate_id("TEAM")
-        
-        # Create CEO
-        ceo_first, ceo_last = generate_name()
-        ceo = TeamMember(
-            id=generate_id("EMP"),
-            name=f"{ceo_first} {ceo_last}",
-            email=generate_email(ceo_first, ceo_last, self.config.email_domain),
-            department=Department.OPERATIONS,
-            role=Role.COO,  # Using COO as placeholder since we don't have CEO in enum
-            seniority=Seniority.PRINCIPAL,  # Using PRINCIPAL as the highest seniority level
-            skills=[Skill.TEAM_LEADERSHIP, Skill.COMMUNICATION],
-            join_date=self.company_start_date + timedelta(days=1),
-            office_location=OFFICE_LOCATIONS["headquarters"],
-            team_id=exec_team_id  # Assign CEO to executive team
+    def _generate_business_unit(self, bu_config: dict):
+        """Generate a business unit and its teams."""
+        bu_id = f"BU{generate_id()}"
+        bu_head = self._generate_team_member(
+            name=bu_config.get('head_name', ''),
+            role=bu_config.get('head_role', 'Business Unit Head'),
+            department=bu_config.get('name', ''),
+            seniority=Seniority.PRINCIPAL
         )
-        self.members[ceo.id] = ceo
         
-        # Create executive team
-        exec_team = Team(
-            id=exec_team_id,
-            name="Executive Team",
-            department=Department.OPERATIONS,
-            description="Company executive leadership team",
-            manager_id=ceo.id,
-            members=[ceo],
-            tech_stack=[],
-            created_date=self.company_start_date,
-            timezone=self.config.meeting_timezone,
-            is_virtual=False,
-            components=[Component.SECURITY.value]  # Assign SECURITY component to executive team
-        )
-        self.teams[exec_team_id] = exec_team
-
-    def _generate_business_unit(self, bu_config: Dict):
-        """Generate a business unit and its departments."""
-        bu_id = generate_id("BU")
-        bu = BusinessUnit(
+        business_unit = BusinessUnit(
             id=bu_id,
-            name=bu_config["name"],
-            description=f"Business unit responsible for {bu_config['name']}",
-            head_id="",  # Will be set when we create department heads
-            departments=[Department(d) for d in bu_config["departments"]],
-            budget=bu_config["budget"],
-            headcount=sum(
-                sum(team["size"] for team in DEPARTMENT_STRUCTURE[dept]["teams"])
-                for dept in bu_config["departments"]
-                if dept in DEPARTMENT_STRUCTURE
-            ),
-            location=bu_config["location"]
+            name=bu_config.get('name', ''),
+            description=bu_config.get('description', ''),
+            head_id=bu_head.id,
+            departments=bu_config.get('departments', []),
+            teams=[]
         )
         
-        # Generate departments
-        for dept_name in bu_config["departments"]:
-            if dept_name in DEPARTMENT_STRUCTURE:
-                self._generate_department(dept_name, bu)
+        # Generate teams for this business unit
+        for team_config in bu_config.get('teams', []):
+            team = self._generate_team(team_config, business_unit)
+            business_unit.teams.append(team)
         
-        self.business_units[bu_id] = bu
+        self.business_units[bu_id] = business_unit
 
-    def _generate_department(self, dept_name: str, business_unit: BusinessUnit):
-        """Generate a department's structure."""
-        dept_config = DEPARTMENT_STRUCTURE[dept_name]
-        
-        # Generate department head and required roles
-        for role_name in dept_config["required_roles"]:
-            member = self._generate_team_member(
-                department=Department(dept_name),
-                role=Role[role_name],
-                seniority=SeniorityLevel.VP if "VP" in role_name else SeniorityLevel.DIRECTOR,
-                location=business_unit.location,
-                team_id=generate_id("TEAM")  # Generate a team ID for department head
-            )
-            if role_name.startswith("C"):  # C-level executive
-                business_unit.head_id = member.id
-        
-        # Generate teams
-        for team_config in dept_config["teams"]:
-            self._generate_team(team_config, dept_name, business_unit)
-
-    def _generate_team(self, team_config: Dict, dept_name: str, business_unit: BusinessUnit):
+    def _generate_team(self, team_config: dict, business_unit: BusinessUnit) -> Team:
         """Generate a team and its members."""
-        team_id = generate_id("TEAM")
+        team_id = f"TEAM{generate_id()}"
         
-        # Generate team members
-        team_members = []
-        required_roles = self.config.required_roles_per_team.copy()
+        # Get department from team config or business unit
+        department = team_config.get('department', business_unit.name)
         
-        # Add team lead first
-        lead = self._generate_team_member(
-            department=Department(dept_name),
-            role=Role.TECH_LEAD,
-            seniority=SeniorityLevel.SENIOR,
-            location=business_unit.location,
-            team_id=team_id
-        )
-        team_members.append(lead)
-        self.members[lead.id] = lead
-        
-        # Generate other team members
-        remaining_count = team_config["size"] - 1
-        while remaining_count > 0:
-            # Determine role based on requirements
-            role_name = next(
-                (role for role, count in required_roles.items() if count > 0),
-                "Software Engineer"
-            )
-            required_roles[role_name] = required_roles.get(role_name, 0) - 1
-            
-            # Map role names to Role enum values
-            role_mapping = {
-                "Senior Software Engineer": Role.SENIOR_ENGINEER,
-                "Software Engineer": Role.SOFTWARE_ENGINEER,
-                "Junior Software Engineer": Role.JUNIOR_ENGINEER
-            }
-            
-            role = role_mapping.get(role_name, Role.SOFTWARE_ENGINEER)
-            
-            member = self._generate_team_member(
-                department=Department(dept_name),
-                role=role,
-                seniority=SeniorityLevel.MID,
-                location=business_unit.location,
-                team_id=team_id
-            )
-            team_members.append(member)
-            self.members[member.id] = member
-            remaining_count -= 1
-        
-        # Create team
-        # Map team name to component
-        component_mapping = {
-            "Backend Core": Component.BACKEND,
-            "Frontend Experience": Component.FRONTEND,
-            "Platform Infrastructure": Component.INFRASTRUCTURE,
-            "Data Engineering": Component.DATABASE,
-            "Technical Support": Component.TESTING,
-            "UX/UI Design": Component.FRONTEND,
-            "Product Strategy": Component.FRONTEND,  # Default to frontend for product teams
-            "Enterprise Sales": Component.FRONTEND,  # Default to frontend for sales teams
-            "Sales Operations": Component.FRONTEND,  # Default to frontend for sales teams
-            "Customer Success": Component.FRONTEND,  # Default to frontend for support teams
-            "Financial Planning": Component.FRONTEND,  # Default to frontend for finance teams
-            "Talent Acquisition": Component.FRONTEND,  # Default to frontend for HR teams
-            "Growth Marketing": Component.FRONTEND,  # Default to frontend for marketing teams
-            "Content & Communications": Component.FRONTEND  # Default to frontend for marketing teams
-        }
-        
-        # Create team
+        # Create team structure
         team = Team(
             id=team_id,
-            name=team_config["name"],
-            department=Department(dept_name),
-            description=f"Team responsible for {team_config['name']}",
-            manager_id=lead.id,
-            members=team_members,  # Store TeamMember objects directly
-            tech_stack=[Skill(skill) for skill in team_config["tech_stack"]],
-            created_date=random_date_between(
-                self.company_start_date,
-                datetime.now() - timedelta(days=90)
-            ),
-            timezone=self.config.meeting_timezone,
-            is_virtual=random.random() < OFFICE_LOCATIONS["remote_percentage"],
-            components=[component_mapping.get(team_config["name"], Component.FRONTEND)]  # Map team name to component
+            name=team_config.get('name', ''),
+            department=department,
+            description=team_config.get('description', ''),
+            manager_id='',  # Will be set after generating members
+            members=[],
+            tech_stack=team_config.get('tech_stack', []),
+            created_date=self.company_start_date,
+            mission=team_config.get('mission', ''),
+            objectives=team_config.get('objectives', []),
+            timezone=self.meeting_timezone,
+            is_virtual=team_config.get('is_virtual', False),
+            components=team_config.get('components', []),
+            current_projects=team_config.get('current_projects', [])
         )
+        
+        # Generate team members from config
+        configured_members = team_config.get('team_members', [])
+        for member_config in configured_members:
+            member = self._generate_team_member(
+                name=member_config.get('name'),
+                role=member_config.get('role'),
+                department=department,
+                seniority=self._determine_seniority(member_config.get('role', ''))
+            )
+            team.members.append(member)
+            
+            # Set the first member with a leadership role as team manager
+            if not team.manager_id and self._is_leadership_role(member_config.get('role', '')):
+                team.manager_id = member.id
+        
+        # If no manager was set, use the first member as manager
+        if not team.manager_id and team.members:
+            team.manager_id = team.members[0].id
         
         self.teams[team_id] = team
-        business_unit.teams.append(team)
+        return team
 
-    def _generate_team_member(
-        self,
-        department: Department,
-        role: Role,
-        seniority: SeniorityLevel,
-        location: str,
-        team_id: str = None
-    ) -> TeamMember:
-        """Generate a team member with appropriate attributes."""
-        first_name, last_name = generate_name()
+    def _determine_seniority(self, role: str) -> Seniority:
+        """Determine seniority level based on role."""
+        role_lower = role.lower()
+        if any(title in role_lower for title in ['lead', 'senior', 'manager', 'head']):
+            return Seniority.SENIOR
+        elif 'junior' in role_lower:
+            return Seniority.JUNIOR
+        else:
+            return Seniority.MID
+
+    def _is_leadership_role(self, role: str) -> bool:
+        """Check if the role is a leadership position."""
+        role_lower = role.lower()
+        return any(title in role_lower for title in ['lead', 'manager', 'head', 'director', 'vp', 'chief'])
+
+    def _generate_team_member(self, name: str = None, role: str = None, department: str = None, seniority: Seniority = None) -> TeamMember:
+        """Generate a team member with the given attributes."""
+        member_id = f"EMP{generate_id()}"
         
-        # Map SeniorityLevel to Seniority
-        seniority_mapping = {
-            SeniorityLevel.C_LEVEL: Seniority.PRINCIPAL,
-            SeniorityLevel.VP: Seniority.PRINCIPAL,
-            SeniorityLevel.DIRECTOR: Seniority.PRINCIPAL,
-            SeniorityLevel.MANAGER: Seniority.LEAD,
-            SeniorityLevel.SENIOR: Seniority.SENIOR,
-            SeniorityLevel.MID: Seniority.MID,
-            SeniorityLevel.JUNIOR: Seniority.JUNIOR,
-            SeniorityLevel.ENTRY: Seniority.JUNIOR
-        }
+        if name is None:
+            first_name, last_name = generate_name()
+            name = f"{first_name} {last_name}"
         
-        # Determine skills based on role
-        base_skills = ROLE_SKILL_REQUIREMENTS.get(role.value, [])
-        skills = [Skill(skill) for skill in base_skills]
+        if role is None:
+            role = random.choice(['Software Engineer', 'Senior Software Engineer', 'Junior Software Engineer'])
         
-        # Add random certifications based on department
-        certifications = []
-        if department.value in DEPARTMENT_CERTIFICATIONS:
-            cert_count = random.randint(0, 2)
-            if cert_count > 0:
-                certifications = random.sample(
-                    DEPARTMENT_CERTIFICATIONS[department.value],
-                    cert_count
-                )
+        if department is None:
+            department = random.choice(['Engineering', 'Product', 'Design', 'Marketing'])
         
-        # Determine if remote based on company policy
-        is_remote = random.random() < OFFICE_LOCATIONS["remote_percentage"]
+        if seniority is None:
+            seniority = random.choice([Seniority.JUNIOR, Seniority.MID_LEVEL, Seniority.SENIOR])
+        
+        # Generate skills based on role using GPT-4
+        skills = self._generate_skills_for_role(role)
         
         member = TeamMember(
-            id=generate_id("EMP"),
-            name=f"{first_name} {last_name}",
-            email=generate_email(first_name, last_name, self.config.email_domain),
+            id=member_id,
+            name=name,
+            email=f"{name.lower().replace(' ', '.')}@{self.email_domain}",
             department=department,
             role=role,
-            seniority=seniority_mapping[seniority],
+            seniority=seniority,
             skills=skills,
-            join_date=random_date_between(
-                self.company_start_date,
-                datetime.now() - timedelta(days=30)
-            ),
-            certifications=certifications,
-            languages=["English"],
-            office_location=None if is_remote else location,
-            is_remote=is_remote,
-            team_id=team_id
+            join_date=random_date_between(self.company_start_date, datetime.now()),
+            reports_to=None,
+            direct_reports=[],
+            certifications=self._generate_certifications_for_role(role),
+            languages=['English'],
+            office_location=random.choice(['New York, NY', 'San Francisco, CA', 'Remote']),
+            is_remote=random.choice([True, False]),
+            team_id=None  # Will be set by the team
         )
         
-        self.members[member.id] = member
+        self.members[member_id] = member
         return member
+
+    def _generate_skills_for_role(self, role: str) -> List[str]:
+        """Generate relevant skills for a given role using role context."""
+        role_lower = role.lower()
+        if 'backend' in role_lower or 'software engineer' in role_lower:
+            return random_subset(['Python', 'JavaScript', 'AWS', 'Node.js', 'SQL', 'Docker', 'Kubernetes'])
+        elif 'frontend' in role_lower:
+            return random_subset(['JavaScript', 'React', 'TypeScript', 'HTML', 'CSS'])
+        elif 'devops' in role_lower:
+            return random_subset(['AWS', 'Docker', 'Kubernetes', 'Jenkins', 'Terraform'])
+        elif 'qa' in role_lower or 'test' in role_lower:
+            return random_subset(['Testing', 'Python', 'Selenium', 'Test Automation'])
+        else:
+            return random_subset(['Python', 'JavaScript', 'AWS', 'React', 'Node.js', 'SQL'])
+
+    def _generate_certifications_for_role(self, role: str) -> List[str]:
+        """Generate relevant certifications for a given role."""
+        role_lower = role.lower()
+        if 'backend' in role_lower or 'software engineer' in role_lower:
+            return random_subset(['AWS Certified Solutions Architect', 'Certified Kubernetes Administrator'])
+        elif 'devops' in role_lower:
+            return random_subset(['AWS Certified DevOps Engineer', 'Certified Kubernetes Administrator'])
+        elif 'scrum' in role_lower or 'manager' in role_lower:
+            return random_subset(['Certified Scrum Master', 'Project Management Professional'])
+        else:
+            return random_subset(['AWS Certified Solutions Architect', 'Certified Kubernetes Administrator', 'Certified Scrum Master'])
 
     def get_all_members(self) -> Dict[str, TeamMember]:
         """Return all generated team members."""

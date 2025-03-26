@@ -9,7 +9,7 @@ from src.models.communication import MeetingType
 from src.scripts.generate_teams import generate_teams
 from src.scripts.generate_tickets import generate_tickets
 
-def generate_communication(teams=None, team_members=None, tickets=None, output_dir: str = "generated_data"):
+def generate_communication(teams=None, team_members=None, tickets=None, output_dir: str = "generated_data", company_config: dict = None):
     """Generate communication data including channels, messages, and meetings."""
     print("Starting communication data generation...")
     
@@ -21,8 +21,8 @@ def generate_communication(teams=None, team_members=None, tickets=None, output_d
     if tickets is None:
         tickets, _ = generate_tickets(teams, team_members, output_dir)
     
-    # Initialize generator
-    generator = CommunicationGenerator(team_members, teams, INNOVATECH_CONFIG)
+    # Initialize generator with company config
+    generator = CommunicationGenerator(team_members, teams, company_config)
     
     # Storage for generated data
     channels = {}

@@ -1,16 +1,31 @@
-from datetime import datetime
-import json
+import os
+import sys
 from pathlib import Path
 
-from src.config.sample_company import INNOVATECH_CONFIG
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent.parent.parent)
+sys.path.insert(0, project_root)
+
+from datetime import datetime
+import json
+
 from src.generators.team_generator import TeamGenerator
 
-def generate_teams(output_dir: str = "generated_data"):
-    """Generate organizational structure including teams and members."""
+def generate_teams(config_file: str, output_dir: str = "generated_data"):
+    """Generate organizational structure including teams and members.
+    
+    Args:
+        config_file: Path to the company configuration JSON file
+        output_dir: Directory to save generated data
+    """
     print("Starting team data generation...")
     
+    # Load company configuration
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+    
     # Initialize generator
-    generator = TeamGenerator(INNOVATECH_CONFIG)
+    generator = TeamGenerator(config)
     
     # Generate organization structure
     business_units = generator.generate_organization()
@@ -53,4 +68,10 @@ def generate_teams(output_dir: str = "generated_data"):
     return teams, team_members
 
 if __name__ == "__main__":
-    generate_teams() 
+    import argparse
+    parser = argparse.ArgumentParser(description='Generate team data from company configuration')
+    parser.add_argument('--config-file', required=True, help='Path to company configuration JSON file')
+    parser.add_argument('--output-dir', default='generated_data', help='Directory to save generated data')
+    args = parser.parse_args()
+    
+    generate_teams(args.config_file, args.output_dir) 

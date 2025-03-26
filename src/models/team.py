@@ -142,50 +142,51 @@ class SeniorityLevel(str, Enum):
 class Seniority(str, Enum):
     JUNIOR = "Junior"
     MID = "Mid-level"
+    MID_LEVEL = "Mid-level"  # Alias for MID
     SENIOR = "Senior"
     LEAD = "Lead"
     PRINCIPAL = "Principal"
 
 class TeamMember(BaseModel):
-    id: str = Field(..., description="Unique identifier for the team member")
-    name: str = Field(..., description="Full name of the team member")
-    email: str = Field(..., description="Work email address")
-    department: Department = Field(..., description="Department the member belongs to")
-    role: Role = Field(..., description="Current role in the company")
-    seniority: Seniority = Field(..., description="Seniority level")
-    skills: List[Skill] = Field(default_factory=list, description="Professional skills")
-    join_date: datetime = Field(..., description="Date when member joined the company")
-    reports_to: Optional[str] = Field(None, description="ID of the manager/lead")
-    direct_reports: List[str] = Field(default_factory=list, description="IDs of team members reporting to this person")
-    certifications: List[str] = Field(default_factory=list, description="Professional certifications")
-    languages: List[str] = Field(default_factory=list, description="Languages spoken")
-    office_location: Optional[str] = Field(None, description="Primary office location")
-    is_remote: bool = Field(default=False, description="Whether the member works remotely")
-    team_id: str = Field(..., description="ID of the team the member belongs to")
+    id: str
+    name: str
+    email: str
+    department: str
+    role: str
+    seniority: Seniority
+    skills: List[str]
+    join_date: datetime
+    reports_to: Optional[str] = None
+    direct_reports: List[str] = []
+    certifications: List[str] = []
+    languages: List[str] = []
+    office_location: Optional[str] = None
+    is_remote: bool = False
+    team_id: Optional[str] = None
 
 class Team(BaseModel):
-    id: str = Field(..., description="Unique identifier for the team")
-    name: str = Field(..., description="Team name")
-    department: Department = Field(..., description="Department this team belongs to")
-    description: str = Field(..., description="Brief description of team's responsibilities")
-    manager_id: str = Field(..., description="ID of the team manager")
-    members: List[TeamMember] = Field(default_factory=list, description="List of team members")
-    tech_stack: Optional[List[Skill]] = Field(default_factory=list, description="Technologies/skills used by the team")
-    created_date: datetime = Field(..., description="Date when team was formed")
-    mission: Optional[str] = Field(None, description="Team's mission statement")
-    objectives: List[str] = Field(default_factory=list, description="Team's current objectives")
-    timezone: str = Field(default="UTC", description="Primary timezone of the team")
-    is_virtual: bool = Field(default=False, description="Whether the team is fully remote")
-    components: List[str] = Field(default_factory=list, description="Components owned by the team")
-    current_projects: List[str] = Field(default_factory=list, description="Current projects the team is working on")
+    id: str
+    name: str
+    department: str
+    description: str
+    manager_id: str
+    members: List[TeamMember]
+    tech_stack: List[str] = []
+    created_date: datetime
+    mission: Optional[str] = None
+    objectives: List[str] = []
+    timezone: str = "UTC"
+    is_virtual: bool = False
+    components: List[str] = []
+    current_projects: List[str] = []
 
 class BusinessUnit(BaseModel):
-    id: str = Field(..., description="Unique identifier for the business unit")
-    name: str = Field(..., description="Business unit name")
-    description: str = Field(..., description="Business unit description")
-    head_id: str = Field(..., description="ID of business unit head")
-    departments: List[Department] = Field(..., description="Departments in this business unit")
-    teams: List[Team] = Field(default_factory=list, description="Teams in the business unit")
-    budget: Optional[float] = Field(None, description="Annual budget allocation")
-    headcount: int = Field(..., description="Total number of employees")
-    location: Optional[str] = Field(None, description="Primary location of the business unit") 
+    id: str
+    name: str
+    description: str
+    head_id: str
+    departments: List[str] = []
+    teams: List[Team] = []
+    budget: Optional[float] = None
+    headcount: Optional[int] = None
+    location: Optional[str] = None 
