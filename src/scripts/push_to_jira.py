@@ -86,14 +86,18 @@ def create_jira_ticket(ticket_data, jira, project_key, fix_version, sprint, crea
     if ticket_data['type'] in issue_type_map:
         issue_fields['issuetype'] = {'name': issue_type_map[ticket_data['type']]}
 
-    # Handle parent relationships for subtasks
-    if ticket_data.get('parent_ticket'):
-        parent_key = created_tickets.get(ticket_data['parent_ticket'])
-        if parent_key:
-            issue_fields['parent'] = {'key': parent_key}
+    # Handle parent-child relationships
+    if ticket_data['type'] in ['Story', 'Task']:
+        parent_id = ticket_data.get('epic_link')
+        if parent_id and parent_id in created_tickets:
+            issue_fields['parent'] = {'key': created_tickets[parent_id]}
+    elif ticket_data['type'] == 'Sub-task':
+        parent_id = ticket_data.get('parent_ticket')
+        if parent_id and parent_id in created_tickets:
+            issue_fields['parent'] = {'key': created_tickets[parent_id]}
         else:
-            print(f"Warning: Parent ticket {ticket_data['parent_ticket']} not found for subtask {ticket_data['id']}")
-            return None  # Skip creating the subtask if parent is not found
+            print(f"Warning: Parent ticket {parent_id} not found for {ticket_data['type']} {ticket_data['id']}")
+            return None  # Skip creating the ticket if parent is not found
 
     # Create the issue
     try:
