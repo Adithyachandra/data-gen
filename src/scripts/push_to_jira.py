@@ -74,10 +74,6 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         for criterion in ticket_data["acceptance_criteria"]:
             description += f"* {criterion}\n"
     
-    # Add story points to description for now
-    if ticket_data.get("story_points"):
-        description += f"\n\n## Story Points\n{ticket_data['story_points']}"
-    
     # Prepare the issue fields with only essential fields
     issue_fields = {
         "project": {"key": os.getenv("JIRA_PROJECT_KEY")},
@@ -86,6 +82,10 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         "issuetype": {"name": issue_type_map.get(ticket_data["type"], "Task")},
         "labels": ticket_data["labels"]
     }
+    
+    # Add story points if they exist (for all ticket types except Epics)
+    if ticket_data.get("story_points") and ticket_data["type"] != "Epic":
+        issue_fields["customfield_10016"] = ticket_data["story_points"]  # Story Point Estimate field
     
     # Handle parent relationships only for Stories under Epics
     if ticket_data["type"] == "Story" and ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
@@ -145,6 +145,14 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         print(f"Error creating {ticket_data['type']} {ticket_data['id']}: {str(e)}")
         raise
 
+def get_available_fields(jira: JIRA) -> None:
+    """Print all available fields in the JIRA project."""
+    fields = jira.fields()
+    print("\nAvailable JIRA Fields:")
+    for field in fields:
+        if field.get('custom', False):
+            print(f"Field ID: {field['id']}, Name: {field['name']}")
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Push generated data to JIRA')
@@ -165,6 +173,9 @@ def main():
     
     # Initialize JIRA client
     jira = JIRA(server=jira_url, basic_auth=(jira_username, jira_api_token))
+    
+    # Print available fields to find the correct story points field ID
+    get_available_fields(jira)
     
     # Load generated data from the specified directory
     tickets = load_data(os.path.join(args.input_dir, "tickets.json"))
