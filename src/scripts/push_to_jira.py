@@ -28,6 +28,10 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         for criterion in ticket_data["acceptance_criteria"]:
             description += f"* {criterion}\n"
     
+    # Add story points to description for now
+    if ticket_data.get("story_points"):
+        description += f"\n\n## Story Points\n{ticket_data['story_points']}"
+    
     # Prepare the issue fields with only essential fields
     issue_fields = {
         "project": {"key": os.getenv("JIRA_PROJECT_KEY")},
@@ -37,26 +41,63 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         "labels": ticket_data["labels"]
     }
     
-    # Add Epic-specific fields if this is an Epic
-    if ticket_data["type"] == "Epic":
-        # For Epics, we only need to set the issue type to "Epic"
-        # The Epic fields will be handled by JIRA's default Epic configuration
-        pass
-    
-    # Add Epic link if it exists and the Epic has already been created
-    if ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
+    # Handle parent relationships only for Stories under Epics
+    if ticket_data["type"] == "Story" and ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
+        # For Stories under Epics
         epic_key = created_tickets[ticket_data["epic_link"]]
-        # In JIRA Next-gen projects, Epics are set as parents
         issue_fields["parent"] = {"key": epic_key}
-    # Add parent link if it exists and the parent has already been created
-    elif ticket_data.get("parent_ticket") and ticket_data.get("parent_ticket") in created_tickets:
-        parent_key = created_tickets[ticket_data["parent_ticket"]]
-        issue_fields["parent"] = {"key": parent_key}
     
     # Create the issue
-    issue = jira.create_issue(fields=issue_fields)
-    
-    return issue.key
+    try:
+        issue = jira.create_issue(fields=issue_fields)
+        print(f"Created {ticket_data['type']} {issue.key} from {ticket_data['id']}")
+        
+        # Create Relates link for Tasks to their parent Stories
+        if ticket_data["type"] == "Task" and ticket_data.get("parent_ticket") and ticket_data.get("parent_ticket") in created_tickets:
+            parent_key = created_tickets[ticket_data["parent_ticket"]]
+            try:
+                jira.create_issue_link(
+                    type="Relates",
+                    inwardIssue=issue.key,
+                    outwardIssue=parent_key
+                )
+                print(f"Created Relates link: {issue.key} relates to {parent_key}")
+            except Exception as e:
+                print(f"Warning: Could not create Relates link between {issue.key} and {parent_key}: {str(e)}")
+        
+        # Update relationships after creation
+        if ticket_data.get("depends_on"):
+            for dep_id in ticket_data["depends_on"]:
+                if dep_id in created_tickets:
+                    dep_key = created_tickets[dep_id]
+                    try:
+                        jira.create_issue_link(
+                            type="Depends",
+                            inwardIssue=issue.key,
+                            outwardIssue=dep_key
+                        )
+                        print(f"Created dependency link: {issue.key} depends on {dep_key}")
+                    except Exception as e:
+                        print(f"Warning: Could not create dependency link between {issue.key} and {dep_key}: {str(e)}")
+        
+        if ticket_data.get("blocks"):
+            for block_id in ticket_data["blocks"]:
+                if block_id in created_tickets:
+                    block_key = created_tickets[block_id]
+                    try:
+                        jira.create_issue_link(
+                            type="Blocks",
+                            inwardIssue=issue.key,
+                            outwardIssue=block_key
+                        )
+                        print(f"Created blocks link: {issue.key} blocks {block_key}")
+                    except Exception as e:
+                        print(f"Warning: Could not create blocks link between {issue.key} and {block_key}: {str(e)}")
+        
+        return issue.key
+    except Exception as e:
+        print(f"Error creating {ticket_data['type']} {ticket_data['id']}: {str(e)}")
+        raise
 
 def main():
     # Load environment variables
