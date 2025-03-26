@@ -435,4 +435,80 @@ Please provide a helpful and constructive review comment that:
             max_tokens=200
         )
         
+        return response.choices[0].message.content.strip()
+
+    def generate_story(self, component: str, parent_epic: str = None) -> str:
+        """Generate a user story description using GPT-4"""
+        prompt = f"""Generate a concise user story for a {component} component in the context of {self.config['company_name']}, a {self.config['industry']} company.
+        The story should be part of the epic: {parent_epic}
+
+        Format the story exactly as follows:
+        As a [user type]
+        I want to [action]
+        So that [benefit]
+
+        Acceptance Criteria:
+        1. [First criterion]
+        2. [Second criterion]
+        3. [Third criterion]
+
+        Story Points: [1, 2, 3, 5, 8, 13]
+
+        Additional Context:
+        - Company: {self.config['company_name']}
+        - Industry: {self.config['industry']}
+        - Product: {self.config['product']}
+        - Initiative: {self.config['initiative']}
+        - Component: {component}
+
+        Keep the story focused and concise. The story points should reflect the complexity and effort required.
+        """
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a product owner creating user stories. Keep stories concise and focused on user value."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def generate_task(self, component: str, parent_story: str = None, parent_epic: str = None) -> str:
+        """Generate a task description using GPT-4"""
+        prompt = f"""Generate a concise technical task description for a {component} component in the context of {self.config['company_name']}, a {self.config['industry']} company.
+        The task should be part of the story: {parent_story} and epic: {parent_epic}
+
+        Format the task exactly as follows:
+        Task: [Brief task description]
+
+        Technical Details:
+        - [Key technical point 1]
+        - [Key technical point 2]
+        - [Key technical point 3]
+
+        Estimated Hours: [number]
+
+        Additional Context:
+        - Company: {self.config['company_name']}
+        - Industry: {self.config['industry']}
+        - Product: {self.config['product']}
+        - Initiative: {self.config['initiative']}
+        - Component: {component}
+
+        Keep the task description focused and technical. The estimated hours should reflect the actual development effort.
+        """
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical lead creating development tasks. Keep tasks focused on technical implementation."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=300
+        )
+        
         return response.choices[0].message.content.strip() 

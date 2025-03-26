@@ -606,69 +606,28 @@ class TicketGenerator:
                         note = f"Technical implementation of {story.summary}"
                         self._create_relationship(task, story, TicketRelationType.IMPLEMENTS, note)
 
-    def generate_sprint_tickets(self, sprint: Sprint, component: Component) -> Dict[str, List[Ticket]]:
-        """Generate tickets for a sprint."""
-        # Create an epic for the sprint
-        epic = self.generate_epic(component)
+    def generate_sprint_tickets(self, sprint_id: str, team_id: str, num_tickets: int) -> List[Dict]:
+        """Generate tickets for a sprint"""
+        tickets = []
+        epic = self.generate_epic(random.choice(list(self.teams.values())[0].components))
+        tickets.append(epic)
         
-        # Generate stories
-        stories = []
-        for _ in range(self.stories_per_sprint):
-            story = self.generate_story(epic, component)
-            stories.append(story)
+        # Generate stories linked to epic
+        for _ in range(num_tickets // 2):
+            story = self.generate_story(epic, random.choice(epic.components))
+            tickets.append(story)
             
-            # Generate tasks for each story
-            tasks = []
-            for _ in range(self.tasks_per_story):
-                task = self.generate_task(story, component)
-                tasks.append(task)
+            # Generate tasks linked to both story and epic
+            for _ in range(2):
+                task = self.generate_task(story, random.choice(story.components))
+                tickets.append(task)
                 
-                # Generate subtasks for each task
-                subtasks = []
-                for _ in range(self.subtasks_per_task):
-                    subtask = self.generate_subtask(task, component)
-                    subtasks.append(subtask)
-                    self.assign_ticket_to_sprint(subtask, sprint)
-                
-                # Create dependencies between subtasks
-                self._create_dependencies(task, subtasks)
-                
-                # Assign task to sprint
-                self.assign_ticket_to_sprint(task, sprint)
-            
-            # Create dependencies between tasks
-            self._create_dependencies(story, tasks)
-            
-            # Assign story to sprint
-            self.assign_ticket_to_sprint(story, sprint)
+                # Generate subtasks linked to task, story, and epic
+                for _ in range(2):
+                    subtask = self.generate_subtask(task, random.choice(task.components))
+                    tickets.append(subtask)
         
-        # Create dependencies between stories
-        self._create_dependencies(epic, stories)
-        
-        # Generate some bugs
-        num_bugs = int(len(stories) * self.config.bug_frequency)
-        bugs = []
-        for _ in range(num_bugs):
-            bug = self.generate_bug(component)
-            bugs.append(bug)
-            self.assign_ticket_to_sprint(bug, sprint)
-        
-        # Handle clones and duplicates
-        self._handle_clones_and_duplicates(stories + tasks)
-        
-        # Handle implementations
-        self._handle_implementations(stories, tasks)
-        
-        # Create blocking issues for some tickets
-        for ticket in random.sample(stories + tasks, k=int(len(stories + tasks) * 0.2)):
-            self._create_blocking_issue(ticket)
-        
-        return {
-            "epic": [epic],
-            "stories": stories,
-            "tasks": tasks,
-            "bugs": bugs
-        }
+        return tickets
 
     def generate_ticket_hierarchy(self) -> Dict[str, List[Ticket]]:
         """Generate a complete ticket hierarchy with epics, stories, tasks, and bugs."""
@@ -691,15 +650,16 @@ class TicketGenerator:
                 
                 # Generate tickets for each sprint
                 for sprint in sprints:
-                    sprint_tickets = self.generate_sprint_tickets(sprint, component)
-                    result["stories"].extend(sprint_tickets["stories"])
-                    result["tasks"].extend(sprint_tickets["tasks"])
-                    result["subtasks"].extend(sprint_tickets["subtasks"])
-                    result["bugs"].extend(sprint_tickets["bugs"])
+                    sprint_tickets = self.generate_sprint_tickets(sprint.id, team.id, len(sprint_tickets))
+                    result["stories"].extend(sprint_tickets[1:])
+                    result["tasks"].extend(sprint_tickets[2:])
+                    result["subtasks"].extend(sprint_tickets[3:])
+                    result["bugs"].extend([sprint_tickets[0] if isinstance(sprint_tickets[0], Bug) else None])
                     
                     # Link stories to epic
-                    for story in sprint_tickets["stories"]:
-                        epic.child_stories.append(story.id)
+                    for story in sprint_tickets[1:]:
+                        if isinstance(story, Story):
+                            epic.child_stories.append(story.id)
         
         return result
 
