@@ -1,0 +1,192 @@
+{
+  "company": {
+    "name": "Acme payments",
+    "description": "Acme is a payment processor based out of India similar to Stripe that provides Payment Gateway services to Online and offline retailers across the world. Caters to small and medium  enterprises",
+    "industry": "FIntech",
+    "created_at": "2025-03-26T18:10:39.333007"
+  },
+  "business_units": [
+    {
+      "name": "Payment Processing",
+      "description": "Responsible for the development and maintenance of secure payment gateway services",
+      "teams": [
+        {
+          "name": "Development",
+          "description": "Focuses on building and improving the payment processing system",
+          "size": 10,
+          "team_members": [
+            {
+              "name": "Rajesh Gupta",
+              "role": "Senior Backend Developer"
+            },
+            {
+              "name": "Amit Patil",
+              "role": "DevOps Engineer"
+            },
+            {
+              "name": "Pooja Sharma",
+              "role": "Full Stack Developer"
+            },
+            {
+              "name": "Neha Agarwal",
+              "role": "QA Engineer"
+            },
+            {
+              "name": "Sumit Kumar",
+              "role": "Junior Backend Developer"
+            },
+            {
+              "name": "Ravi Mehta",
+              "role": "Junior Backend Developer"
+            },
+            {
+              "name": "Sneha Joshi",
+              "role": "Frontend Developer"
+            },
+            {
+              "name": "Ankit Singh",
+              "role": "Frontend Developer"
+            },
+            {
+              "name": "Kavita Yadav",
+              "role": "Product Manager"
+            },
+            {
+              "name": "Manish Verma",
+              "role": "Scrum Master"
+            }
+          ]
+        },
+        {
+          "name": "Customer Support",
+          "description": "Resolves customer issues and ensures smooth transactions",
+          "size": 5,
+          "team_members": [
+            {
+              "name": "Anjali Rai",
+              "role": "Support Team Lead"
+            },
+            {
+              "name": "Sandeep Tiwari",
+              "role": "Customer Support Specialist"
+            },
+            {
+              "name": "Vijay Kumar",
+              "role": "Customer Support Specialist"
+            },
+            {
+              "name": "Ritu Mishra",
+              "role": "Customer Support Specialist"
+            },
+            {
+              "name": "Laxmi Patel",
+              "role": "Customer Support Specialist"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Business Development",
+      "description": "Identifies growth opportunities and builds relationships with potential clients",
+      "teams": [
+        {
+          "name": "Sales",
+          "description": "Acquires new clients and maintains relationships with existing clients",
+          "size": 7,
+          "team_members": [
+            {
+              "name": "Sanjay Bhatia",
+              "role": "Sales Manager"
+            },
+            {
+              "name": "Aditi Khanna",
+              "role": "Sales Associate"
+            },
+            {
+              "name": "Rohit Jain",
+              "role": "Sales Associate"
+            },
+            {
+              "name": "Suman Singh",
+              "role": "Sales Associate"
+            },
+            {
+              "name": "Vikram Sharma",
+              "role": "Sales Associate"
+            },
+            {
+              "name": "Geeta Kapoor",
+              "role": "Sales Associate"
+            },
+            {
+              "name": "Mohit Malhotra",
+              "role": "Sales Associate"
+            }
+          ]
+        },
+        {
+          "name": "Marketing",
+          "description": "Promotes the company's products and services",
+          "size": 6,
+          "team_members": [
+            {
+              "name": "Kiran Rana",
+              "role": "Marketing Manager"
+            },
+            {
+              "name": "Anshul Verma",
+              "role": "Digital Marketing Specialist"
+            },
+            {
+              "name": "Divya Aggarwal",
+              "role": "Content Marketing Specialist"
+            },
+            {
+              "name": "Ramesh Chaudhary",
+              "role": "SEO Specialist"
+            },
+            {
+              "name": "Sakshi Gupta",
+              "role": "Social Media Specialist"
+            },
+            {
+              "name": "Prakash Nair",
+              "role": "Marketing Data Analyst"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "products": [
+    {
+      "name": "AcmePay",
+      "description": "Provides secure, fast, and reliable online payment gateway services",
+      "initiatives": [
+        {
+          "name": "Global Expansion",
+          "description": "Extend services to retailers in more countries"
+        },
+        {
+          "name": "Mobile Integration",
+          "description": "Integrate AcmePay with popular mobile platforms"
+        }
+      ]
+    },
+    {
+      "name": "AcmePOS",
+      "description": "Offline payment processing solution for physical stores",
+      "initiatives": [
+        {
+          "name": "Contactless Payments",
+          "description": "Implement NFC technology to enable contactless payments"
+        },
+        {
+          "name": "Inventory Integration",
+          "description": "Enable integration with inventory management systems"
+        }
+      ]
+    }
+  ]
+}
