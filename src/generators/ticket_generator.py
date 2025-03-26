@@ -16,7 +16,7 @@ from src.config.sample_company import INNOVATECH_CONFIG, PRODUCT_INITIATIVES, PR
 from src.generators.llm_generator import LLMGenerator
 
 class TicketGenerator:
-    def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config=INNOVATECH_CONFIG):
+    def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config: dict):
         self.config = config
         self.team_members = team_members
         self.teams = teams
@@ -91,17 +91,47 @@ class TicketGenerator:
 
     def generate_epic(self, component: Component) -> Epic:
         """Generate an epic with related stories."""
-        epic_id = generate_ticket_id(self.config.project_prefix, self.ticket_counter)
+        epic_id = generate_ticket_id("EPIC", self.ticket_counter)
         self.ticket_counter += 1
         
         # Select epic owner from team members
         epic_owner = random.choice(list(self.team_members.values()))
         
-        # Generate description first
+        # Find the product and initiative in the config
+        product = None
+        initiative = None
+        if self.current_initiative:
+            for p in self.config['products']:
+                for i in p['initiatives']:
+                    if i['name'] == self.current_initiative:
+                        product = p
+                        initiative = i
+                        break
+                if product:
+                    break
+        
+        # Generate description using GPT-4 with context
+        prompt = f"""Generate a detailed epic description for a software development project with the following context:
+        Company: {self.config['company']['name']}
+        Industry: {self.config['company']['industry']}
+        Product: {product['name'] if product else 'Not specified'}
+        Initiative: {initiative['name'] if initiative else 'Not specified'}
+        Component: {component.value}
+        
+        The epic should:
+        1. Align with the company's business goals
+        2. Support the product initiative
+        3. Focus on the specified component
+        4. Include clear success criteria
+        5. Consider technical and business impact
+        
+        Format the response in markdown."""
+        
         description = self.llm.generate_ticket_description(
             title=f"Epic: {component.value} Enhancement Initiative",
             ticket_type="Epic",
-            component=component.value
+            component=component.value,
+            prompt=prompt
         )
         
         # Generate summary from description
@@ -128,29 +158,51 @@ class TicketGenerator:
 
     def generate_story(self, epic: Epic, component: Component) -> Story:
         """Generate a story within an epic."""
-        story_id = generate_ticket_id(self.config.project_prefix, self.ticket_counter)
+        story_id = generate_ticket_id("STORY", self.ticket_counter)
         self.ticket_counter += 1
         
         # Select story owner
         story_owner = random.choice(list(self.team_members.values()))
         
-        # Generate story content using GPT-4
+        # Find the product and initiative in the config
+        product = None
+        initiative = None
+        if self.current_initiative:
+            for p in self.config['products']:
+                for i in p['initiatives']:
+                    if i['name'] == self.current_initiative:
+                        product = p
+                        initiative = i
+                        break
+                if product:
+                    break
+        
+        # Generate story content using GPT-4 with context
+        prompt = f"""Generate a detailed story description for a software development project with the following context:
+        Company: {self.config['company']['name']}
+        Industry: {self.config['company']['industry']}
+        Product: {product['name'] if product else 'Not specified'}
+        Initiative: {initiative['name'] if initiative else 'Not specified'}
+        Component: {component.value}
+        Epic: {epic.summary}
+        
+        The story should:
+        1. Follow user story format (As a... I want... So that...)
+        2. Align with the epic's goals
+        3. Support the product initiative
+        4. Include detailed acceptance criteria
+        5. Consider technical requirements
+        6. Include performance and security considerations
+        7. Define testing requirements
+        8. Specify user personas and needs
+        
+        Format the response in markdown."""
+        
         story_content = self.llm.generate_ticket_description(
             title=f"Story: Implement {component.value} Feature",
             ticket_type="Story",
             component=component.value,
-            prompt=f"""Generate a detailed story description including:
-1. User story format (As a... I want... So that...)
-2. Feature context
-3. Technical context
-4. Detailed acceptance criteria
-5. Technical requirements
-6. Performance requirements
-7. Security requirements
-8. Testing requirements
-9. User persona and needs
-
-Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+            prompt=prompt
         )
         
         # Generate summary from description
@@ -182,30 +234,51 @@ Make the content detailed, realistic, and specific to the feature while keeping 
 
     def generate_task(self, story: Story, component: Component) -> Task:
         """Generate a task within a story."""
-        task_id = generate_ticket_id(self.config.project_prefix, self.ticket_counter)
+        task_id = generate_ticket_id("TASK", self.ticket_counter)
         self.ticket_counter += 1
         
         # Select task owner
         task_owner = random.choice(list(self.team_members.values()))
         
-        # Generate task content using GPT-4
+        # Find the product and initiative in the config
+        product = None
+        initiative = None
+        if self.current_initiative:
+            for p in self.config['products']:
+                for i in p['initiatives']:
+                    if i['name'] == self.current_initiative:
+                        product = p
+                        initiative = i
+                        break
+                if product:
+                    break
+        
+        # Generate task content using GPT-4 with context
+        prompt = f"""Generate a detailed task description for a software development project with the following context:
+        Company: {self.config['company']['name']}
+        Industry: {self.config['company']['industry']}
+        Product: {product['name'] if product else 'Not specified'}
+        Initiative: {initiative['name'] if initiative else 'Not specified'}
+        Component: {component.value}
+        Story: {story.summary}
+        
+        The task should:
+        1. Provide technical implementation details
+        2. Include performance requirements
+        3. Specify testing requirements
+        4. Define documentation needs
+        5. List dependencies
+        6. Include estimated hours
+        7. Consider security implications
+        8. Define review requirements
+        
+        Format the response in markdown."""
+        
         task_content = self.llm.generate_ticket_description(
             title=f"Task: Implement {component.value} Component",
             ticket_type="Task",
             component=component.value,
-            prompt=f"""Generate a detailed task description including:
-1. Technical task summary
-2. Context and background
-3. Technical requirements
-4. Performance requirements
-5. Implementation notes
-6. Dependencies
-7. Testing requirements
-8. Documentation requirements
-9. Review requirements
-10. Estimated hours and technical details
-
-Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+            prompt=prompt
         )
         
         # Generate summary from description
@@ -237,36 +310,63 @@ Make the content detailed, realistic, and specific to the feature while keeping 
 
     def generate_subtask(self, task: Task, component: Component) -> Subtask:
         """Generate a subtask within a task."""
-        subtask_id = generate_ticket_id(self.config.project_prefix, self.ticket_counter)
+        subtask_id = generate_ticket_id("SUBTASK", self.ticket_counter)
         self.ticket_counter += 1
         
         # Select subtask owner
         subtask_owner = random.choice(list(self.team_members.values()))
         
-        # Generate subtask content using GPT-4
+        # Find the product and initiative in the config
+        product = None
+        initiative = None
+        if self.current_initiative:
+            for p in self.config['products']:
+                for i in p['initiatives']:
+                    if i['name'] == self.current_initiative:
+                        product = p
+                        initiative = i
+                        break
+                if product:
+                    break
+        
+        # Generate subtask content using GPT-4 with context
+        prompt = f"""Generate a detailed subtask description for a software development project with the following context:
+        Company: {self.config['company']['name']}
+        Industry: {self.config['company']['industry']}
+        Product: {product['name'] if product else 'Not specified'}
+        Initiative: {initiative['name'] if initiative else 'Not specified'}
+        Component: {component.value}
+        Task: {task.summary}
+        
+        The subtask should:
+        1. Focus on a specific implementation detail
+        2. Include technical specifications
+        3. Define testing requirements
+        4. Specify documentation needs
+        5. List dependencies
+        6. Include estimated hours
+        7. Consider security implications
+        8. Define review requirements
+        
+        Format the response in markdown."""
+        
         subtask_content = self.llm.generate_ticket_description(
             title=f"Subtask: Implement {component.value} Subcomponent",
             ticket_type="Subtask",
             component=component.value,
-            prompt=f"""Generate a detailed subtask description including:
-1. Technical subtask summary
-2. Context and background
-3. Technical requirements
-4. Implementation notes
-5. Dependencies
-6. Testing requirements
-7. Documentation requirements
-8. Estimated hours
-
-Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+            prompt=prompt
         )
         
-        # Parse the generated content to extract estimated hours
+        # Generate summary from description
+        summary = self.llm.generate_summary(subtask_content, "Subtask", component.value)
+        
+        # Parse the generated content to extract estimated hours and technical details
         estimated_hours = self.llm.extract_estimated_hours(subtask_content)
+        technical_details = self.llm.extract_technical_details(subtask_content)
         
         subtask = Subtask(
             id=subtask_id,
-            summary=f"Subtask: Implement {component.value} Subcomponent",
+            summary=summary,
             description=subtask_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -276,8 +376,9 @@ Make the content detailed, realistic, and specific to the feature while keeping 
             assignee_id=subtask_owner.id,
             components=[component],
             created_at=datetime.now() - timedelta(days=random.randint(1, 5)),
-            updated_at=datetime.now() - timedelta(hours=random.randint(1, 24)),
-            estimated_hours=estimated_hours
+            updated_at=datetime.now() - timedelta(days=random.randint(1, 2)),
+            estimated_hours=estimated_hours,
+            technical_details=technical_details
         )
         
         self.subtasks[subtask_id] = subtask
@@ -285,7 +386,7 @@ Make the content detailed, realistic, and specific to the feature while keeping 
 
     def generate_bug(self, component: Component, related_tickets: List[str] = None) -> Bug:
         """Generate a bug ticket."""
-        bug_id = generate_ticket_id(self.config.project_prefix, self.ticket_counter)
+        bug_id = generate_ticket_id("BUG", self.ticket_counter)
         self.ticket_counter += 1
         
         # Select bug reporter and assignee

@@ -329,112 +329,110 @@ Please provide a helpful and constructive review comment that:
                f"2. Discussion Points\n" + \
                f"3. Action Items and Next Steps"
 
-    def extract_acceptance_criteria(self, content: str) -> List[str]:
-        """Extract acceptance criteria from the generated content."""
-        prompt = f"""Extract the acceptance criteria from the following ticket description. Return them as a list of strings, one per line.
-
-Content:
-{content}
-
-Return only the list of acceptance criteria, one per line, without any additional text or formatting."""
-
-        response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical writer extracting acceptance criteria from ticket descriptions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=200
-        )
+    def generate_summary(self, description: str, ticket_type: str, component: str) -> str:
+        """Generate a concise summary from a ticket description."""
+        prompt = f"""Given the following ticket description, generate a concise summary (max 100 characters) that captures the main point.
+        The ticket is of type {ticket_type} and affects the {component} component.
         
-        criteria = response.choices[0].message.content.strip().split('\n')
-        return [c.strip() for c in criteria if c.strip()]
-
-    def extract_user_persona(self, content: str) -> str:
-        """Extract the user persona from the generated content."""
-        prompt = f"""Extract the user persona from the following ticket description. Return only the role of the user (e.g., "Developer", "Product Manager", "End User").
-
-Content:
-{content}
-
-Return only the user role, without any additional text or formatting."""
-
+        Description:
+        {description}
+        
+        Return only the summary, no additional text."""
+        
         response = self.client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical writer extracting user personas from ticket descriptions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
             max_tokens=50
         )
         
         return response.choices[0].message.content.strip()
 
-    def extract_estimated_hours(self, content: str) -> float:
-        """Extract the estimated hours from the generated content."""
-        prompt = f"""Extract the estimated hours from the following ticket description. Return only the number of hours as a float.
-
-Content:
-{content}
-
-Return only the number of hours, without any additional text or formatting."""
-
+    def extract_acceptance_criteria(self, description: str) -> List[str]:
+        """Extract acceptance criteria from a ticket description."""
+        prompt = f"""Given the following ticket description, extract the acceptance criteria as a list of strings.
+        If no explicit acceptance criteria are found, generate appropriate ones based on the description.
+        
+        Description:
+        {description}
+        
+        Return the criteria as a JSON array of strings."""
+        
         response = self.client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical writer extracting estimated hours from ticket descriptions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            # Fallback to default criteria if parsing fails
+            return [
+                "Implementation matches requirements",
+                "Code follows team standards",
+                "Tests pass with adequate coverage",
+                "Documentation is updated"
+            ]
+
+    def extract_user_persona(self, description: str) -> str:
+        """Extract user persona information from a ticket description."""
+        prompt = f"""Given the following ticket description, extract or generate a concise user persona description.
+        The persona should be a brief description of the target user for this feature/story.
+        
+        Description:
+        {description}
+        
+        Return only the user persona description as a single string, no additional text or JSON formatting."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def extract_estimated_hours(self, description: str) -> float:
+        """Extract or estimate the number of hours needed for a task."""
+        prompt = f"""Given the following task description, estimate the number of hours needed to complete it.
+        Consider complexity, testing, and documentation time.
+        
+        Description:
+        {description}
+        
+        Return only the number (decimal is fine), no additional text."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
             max_tokens=10
         )
         
         try:
             return float(response.choices[0].message.content.strip())
         except ValueError:
-            return 4.0  # Default value if extraction fails
+            # Fallback to default estimate if parsing fails
+            return 4.0
 
-    def extract_technical_details(self, content: str) -> str:
-        """Extract technical details from the generated content."""
-        prompt = f"""Extract the technical details and implementation notes from the following ticket description.
-
-Content:
-{content}
-
-Return only the technical details and implementation notes, without any additional text or formatting."""
-
-        response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical writer extracting technical details from ticket descriptions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=200
-        )
-        
-        return response.choices[0].message.content.strip()
-
-    def generate_summary(self, description: str, ticket_type: str, component: str) -> str:
-        """Generate a concise summary from a ticket description."""
-        prompt = f"""Generate a concise, clear summary for a {ticket_type} ticket in the {component} component.
-        The summary should be 5-10 words and capture the essence of the ticket.
+    def extract_technical_details(self, description: str) -> str:
+        """Extract technical implementation details from a task description."""
+        prompt = f"""Given the following task description, extract or generate a concise technical implementation plan.
+        Include key technical considerations, potential challenges, and implementation approach.
         
         Description:
         {description}
         
-        Return only the summary, no additional text."""
-
+        Return the technical details as a single string, focusing on implementation specifics."""
+        
         response = self.client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical writer creating concise ticket summaries."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=50
+            max_tokens=200
         )
         
         return response.choices[0].message.content.strip() 
