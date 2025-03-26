@@ -56,7 +56,7 @@ def create_sprint(jira: JIRA, sprint_data: Dict[str, Any]) -> str:
         print(f"Error creating sprint {sprint_data['name']}: {str(e)}")
         raise
 
-def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_mapping):
+def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_mapping, created_versions):
     """Create a JIRA ticket with proper relationships"""
     try:
         # Map ticket types to JIRA issue type names
@@ -78,7 +78,11 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
 
         # Add fix version if provided
         if ticket_data.get("fix_versions") and ticket_data["fix_versions"]:
-            issue_fields['fixVersions'] = [{'name': fix_version} for fix_version in ticket_data["fix_versions"]]
+            fix_version = ticket_data["fix_versions"][0]
+            if fix_version in created_versions:
+                issue_fields['fixVersions'] = [{'name': created_versions[fix_version]}]
+            else:
+                print(f"Warning: Fix version {fix_version} not found for {ticket_data['type']} {ticket_data['id']}")
 
         # Add sprint for Stories and Tasks only
         if ticket_data['type'] in ['Story', 'Task'] and ticket_data.get('sprint_id'):
@@ -186,7 +190,7 @@ def main():
         if ticket_data["type"] == "Epic":
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints)
+                                            created_tickets, created_sprints, created_versions)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created Epic {jira_key} from {ticket_data['id']}")
@@ -199,7 +203,7 @@ def main():
         if ticket_data["type"] in ["Story", "Task"]:
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints)
+                                            created_tickets, created_sprints, created_versions)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created {ticket_data['type']} {jira_key} from {ticket_data['id']}")
@@ -213,7 +217,7 @@ def main():
             print(f"Found subtask {ticket_data['id']} with parent {ticket_data.get('parent_ticket')}")
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints)
+                                            created_tickets, created_sprints, created_versions)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created Subtask {jira_key} from {ticket_data['id']}")
