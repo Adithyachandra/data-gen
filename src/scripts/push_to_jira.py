@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 from typing import Dict, Any, List
 from datetime import datetime
 from jira import JIRA
@@ -145,6 +146,12 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         raise
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Push generated data to JIRA')
+    parser.add_argument('--input-dir', type=str, default='ticket-gen',
+                      help='Directory containing the JSON files (default: ticket-gen)')
+    args = parser.parse_args()
+
     # Load environment variables
     load_dotenv()
     
@@ -159,10 +166,10 @@ def main():
     # Initialize JIRA client
     jira = JIRA(server=jira_url, basic_auth=(jira_username, jira_api_token))
     
-    # Load generated data
-    tickets = load_data("ticket-gen/tickets.json")
-    sprints = load_data("ticket-gen/sprints.json")
-    fix_versions = load_data("ticket-gen/fix_versions.json")
+    # Load generated data from the specified directory
+    tickets = load_data(os.path.join(args.input_dir, "tickets.json"))
+    sprints = load_data(os.path.join(args.input_dir, "sprints.json"))
+    fix_versions = load_data(os.path.join(args.input_dir, "fix_versions.json"))
     
     # Create fix versions first
     created_versions = {}
@@ -228,7 +235,8 @@ def main():
                 print(f"Error creating ticket {ticket_id}: {str(e)}")
     
     # Save mapping of generated tickets to JIRA tickets
-    with open("ticket-gen/jira_mapping.json", "w") as f:
+    mapping_file = os.path.join(args.input_dir, "jira_mapping.json")
+    with open(mapping_file, "w") as f:
         json.dump({
             "tickets": created_tickets,
             "sprints": created_sprints,
@@ -236,7 +244,7 @@ def main():
         }, f, indent=2)
     
     print(f"\nSuccessfully created {len(created_tickets)} tickets, {len(created_sprints)} sprints, and {len(created_versions)} fix versions in JIRA")
-    print("Mapping saved to ticket-gen/jira_mapping.json")
+    print(f"Mapping saved to {mapping_file}")
 
 if __name__ == "__main__":
     main() 
