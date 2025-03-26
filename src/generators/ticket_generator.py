@@ -97,14 +97,20 @@ class TicketGenerator:
         # Select epic owner from team members
         epic_owner = random.choice(list(self.team_members.values()))
         
+        # Generate description first
+        description = self.llm.generate_ticket_description(
+            title=f"Epic: {component.value} Enhancement Initiative",
+            ticket_type="Epic",
+            component=component.value
+        )
+        
+        # Generate summary from description
+        summary = self.llm.generate_summary(description, "Epic", component.value)
+        
         epic = Epic(
             id=epic_id,
-            summary=f"Epic: {component.value} Enhancement Initiative",
-            description=self.llm.generate_ticket_description(
-                title=f"Epic: {component.value} Enhancement Initiative",
-                ticket_type="Epic",
-                component=component.value
-            ),
+            summary=summary,
+            description=description,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.HIGH,
             reporter_id=epic_owner.id,
@@ -147,13 +153,16 @@ class TicketGenerator:
 Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
         )
         
+        # Generate summary from description
+        summary = self.llm.generate_summary(story_content, "Story", component.value)
+        
         # Parse the generated content to extract acceptance criteria and user persona
         acceptance_criteria = self.llm.extract_acceptance_criteria(story_content)
         user_persona = self.llm.extract_user_persona(story_content)
         
         story = Story(
             id=story_id,
-            summary=f"Story: Implement {component.value} Feature",
+            summary=summary,
             description=story_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -199,13 +208,16 @@ Make the content detailed, realistic, and specific to the feature while keeping 
 Make the content detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
         )
         
+        # Generate summary from description
+        summary = self.llm.generate_summary(task_content, "Task", component.value)
+        
         # Parse the generated content to extract estimated hours and technical details
         estimated_hours = self.llm.extract_estimated_hours(task_content)
         technical_details = self.llm.extract_technical_details(task_content)
         
         task = Task(
             id=task_id,
-            summary=f"Task: Implement {component.value} Component",
+            summary=summary,
             description=task_content,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,

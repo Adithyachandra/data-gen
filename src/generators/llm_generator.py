@@ -415,4 +415,26 @@ Return only the technical details and implementation notes, without any addition
             max_tokens=200
         )
         
+        return response.choices[0].message.content.strip()
+
+    def generate_summary(self, description: str, ticket_type: str, component: str) -> str:
+        """Generate a concise summary from a ticket description."""
+        prompt = f"""Generate a concise, clear summary for a {ticket_type} ticket in the {component} component.
+        The summary should be 5-10 words and capture the essence of the ticket.
+        
+        Description:
+        {description}
+        
+        Return only the summary, no additional text."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer creating concise ticket summaries."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=50
+        )
+        
         return response.choices[0].message.content.strip() 
