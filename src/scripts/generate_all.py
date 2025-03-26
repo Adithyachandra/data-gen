@@ -1,11 +1,61 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import argparse
+import random
+import uuid
+import os
 
 from src.scripts.generate_teams import generate_teams
 from src.scripts.generate_tickets import generate_tickets
 from src.scripts.generate_communication import generate_communication
+from src.models.fix_version import FixVersion
+from src.models.ticket import Sprint, SprintStatus
+from src.generators.utils import generate_id
+
+def create_default_sprint_and_release(teams, output_dir):
+    """Create a default sprint and release for the generated tickets."""
+    # Create a default release
+    current_date = datetime.now()
+    release_date = current_date + timedelta(days=30)
+    fix_version = FixVersion(
+        id=f"REL{generate_id()}",
+        name="Release 1.0",
+        description="Initial release with core features",
+        release_date=release_date,
+        released=False,
+        archived=False
+    )
+    
+    # Create a default sprint
+    sprint_start = current_date - timedelta(days=14)  # Start from 2 weeks ago
+    sprint = Sprint(
+        id=f"SPR{uuid.uuid4().hex[:8]}",
+        name="Sprint 1",
+        goal="Complete initial set of Enterprise Workflow Automation features",
+        description="Initial sprint for core features",
+        start_date=sprint_start,
+        end_date=sprint_start + timedelta(days=14),
+        status=SprintStatus.ACTIVE,
+        team_id=next(iter(teams.values())).id,  # Use the first team's ID
+        story_points_committed=0,
+        story_points_completed=0,
+        velocity=0,
+        retrospective_notes="",
+        tickets=[]
+    )
+    
+    # Save the sprint and release
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
+    
+    with open(os.path.join(output_dir, "sprints.json"), "w") as f:
+        json.dump({sprint.id: sprint.model_dump()}, f, indent=2, default=str)
+    
+    with open(os.path.join(output_dir, "fix_versions.json"), "w") as f:
+        json.dump({fix_version.id: fix_version.model_dump()}, f, indent=2, default=str)
+    
+    return sprint, fix_version
 
 def main():
     """Main function to orchestrate data generation."""
@@ -38,6 +88,11 @@ def main():
     
     if args.batch in ["tickets", "all"]:
         print("\n=== Generating Ticket Data ===")
+        # Create default sprint and release first
+        sprint, fix_version = create_default_sprint_and_release(teams, args.output_dir)
+        print(f"Created default sprint {sprint.id} and release {fix_version.id}")
+        
+        # Generate tickets with the default sprint and release
         tickets, _ = generate_tickets(teams, team_members, args.output_dir, args.num_sprints, args.tickets_per_sprint, args.team_name, args.product_initiative)
     
     if args.batch in ["communication", "all"]:

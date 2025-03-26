@@ -66,10 +66,7 @@ def generate_communication(teams=None, team_members=None, tickets=None, output_d
             MeetingType.SPRINT_RETRO
         ]
         for _ in range(num_meetings):
-            meeting = generator.generate_meeting(
-                team,
-                random.choice(meeting_types)
-            )
+            meeting = generator.generate_meeting(team, random.choice(meeting_types))
             meetings[meeting.id] = meeting
         
         # Generate ticket-related communication

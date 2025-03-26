@@ -31,8 +31,17 @@ ENV/
 *.swp
 *.swo
 
+# Environment variables
+.env
+
+# Generated files
+ticket-gen/*.json
+ticket-gen/jira_mapping.json
+
+# OS
+.DS_Store
+Thumbs.db
+
 # Project specific
 generated_data/
-*.log
-.env
-.DS_Store 
+*.log 

@@ -1,47 +1,67 @@
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
+import random
+import uuid
 
 from src.config.sample_company import INNOVATECH_CONFIG
 from src.generators.ticket_generator import TicketGenerator
 from src.scripts.generate_teams import generate_teams
 from src.models.ticket import Component
+from src.models.fix_version import FixVersion
+
+def generate_id():
+    return uuid.uuid4().hex[:8]
 
 def generate_tickets(teams=None, team_members=None, output_dir: str = "generated_data", num_sprints: int = 1, tickets_per_sprint: int = None, team_name: str = None, product_initiative: str = None):
     """Generate tickets and sprints for all teams.
     
     Args:
-        teams: Dictionary of teams
-        team_members: Dictionary of team members
-        output_dir: Directory to save generated data
-        num_sprints: Number of sprints to generate per team (default: 1)
-        tickets_per_sprint: Target number of tickets to generate per sprint. If None, uses default generation logic.
-        team_name: Name of the team to generate tickets for. If None, generates for all teams.
-        product_initiative: Name of the product initiative to focus on. If None, uses random initiatives.
+        teams: Dictionary of teams to generate tickets for. If None, uses all teams from config.
+        team_members: Dictionary of team members. If None, uses all team members from config.
+        output_dir: Directory to save generated data.
+        num_sprints: Number of sprints to generate per team.
+        tickets_per_sprint: Number of tickets to generate per sprint. If None, uses default values.
+        team_name: Name of specific team to generate tickets for.
+        product_initiative: Name of product initiative to focus on.
     """
-    print("Starting ticket data generation...")
+    # Load configuration
+    config = INNOVATECH_CONFIG
     
-    # If teams and members not provided, generate them
-    if teams is None or team_members is None:
-        teams, team_members = generate_teams(output_dir)
-    
-    # Initialize generator
-    generator = TicketGenerator(team_members, teams, INNOVATECH_CONFIG)
+    # Initialize generators
+    generator = TicketGenerator(team_members or config.team_members, teams or config.teams)
     
     # Set product initiative if specified
     if product_initiative:
-        generator.set_product_initiative(product_initiative)
+        generator.current_initiative = product_initiative
     
-    # Storage for generated data
+    # Initialize storage
     tickets = {}
     sprints = {}
+    fix_versions = {}
+    
+    # Generate fix versions (releases)
+    current_date = datetime.now()
+    for i in range(3):  # Generate 3 releases
+        release_date = current_date + timedelta(days=30 * (i + 1))
+        fix_version = FixVersion(
+            id=f"REL{generate_id()}",
+            name=f"Release {i + 1}.0",
+            description=f"Release {i + 1}.0 with new features and improvements",
+            release_date=release_date,
+            released=False,
+            archived=False
+        )
+        fix_versions[fix_version.id] = fix_version
     
     # Filter teams if team_name is specified
-    target_teams = {name: team for name, team in teams.items() if team.name == team_name} if team_name else teams
-    
-    if not target_teams:
-        print(f"No team found with name: {team_name}")
-        return tickets, sprints
+    target_teams = {}
+    if team_name:
+        for team_id, team in (teams or config.teams).items():
+            if team.name == team_name:
+                target_teams[team_id] = team
+    else:
+        target_teams = teams or config.teams
     
     # Generate tickets for each team
     for team in target_teams.values():
@@ -50,6 +70,9 @@ def generate_tickets(teams=None, team_members=None, output_dir: str = "generated
         # Generate sprints
         team_sprints = []
         sprint_start = datetime.now() - timedelta(days=90)  # Start from 90 days ago
+        
+        # Ensure at least one sprint is generated
+        num_sprints = max(1, num_sprints)
         
         for i in range(num_sprints):
             sprint = generator.generate_sprint(
@@ -76,43 +99,30 @@ def generate_tickets(teams=None, team_members=None, output_dir: str = "generated
             
             sprint_tickets = generator.generate_sprint_tickets(sprint, component)
             
-            # Store tickets
+            # Store tickets and assign to fix versions
             for ticket_type, ticket_list in sprint_tickets.items():
                 for ticket in ticket_list:
                     tickets[ticket.id] = ticket
+                    # Randomly assign tickets to fix versions
+                    if random.random() < 0.7:  # 70% chance of being assigned to a release
+                        ticket.fix_versions = [random.choice(list(fix_versions.keys()))]
     
     # Create output directory
     output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True)
     
-    # Helper function to convert objects to dict
-    def to_dict(obj):
-        if hasattr(obj, "model_dump"):  # Use pydantic v2 method
-            return obj.model_dump()
-        return obj
+    # Save generated data
+    with open(output_dir / "tickets.json", "w") as f:
+        json.dump({k: v.model_dump() for k, v in tickets.items()}, f, indent=2, default=str)
     
-    # Save ticket data
-    data_mapping = {
-        "tickets": tickets,
-        "sprints": sprints
-    }
+    with open(output_dir / "sprints.json", "w") as f:
+        json.dump({k: v.model_dump() for k, v in sprints.items()}, f, indent=2, default=str)
     
-    for name, data in data_mapping.items():
-        output_file = output_dir / f"{name}.json"
-        with open(output_file, "w") as f:
-            json.dump(
-                {k: to_dict(v) for k, v in data.items()},
-                f,
-                indent=2,
-                default=str  # Handle datetime objects
-            )
+    with open(output_dir / "fix_versions.json", "w") as f:
+        json.dump({k: v.model_dump() for k, v in fix_versions.items()}, f, indent=2, default=str)
     
-    print("\nTicket Generation Summary:")
-    print(f"Total Tickets: {len(tickets)}")
-    print(f"Total Sprints: {len(sprints)}")
-    if product_initiative:
-        print(f"Product Initiative: {product_initiative}")
-    print(f"\nData saved to {output_dir}")
+    print(f"\nGenerated {len(tickets)} tickets, {len(sprints)} sprints, and {len(fix_versions)} releases")
+    print(f"Data saved to {output_dir}")
     
     return tickets, sprints
 
