@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent.parent)
@@ -34,27 +35,60 @@ def extract_teams_and_members(config):
     teams = {}
     team_members = {}
     
+    # Get company domain or use a default
+    company_name = config.get('company', {}).get('name', 'company').lower().replace(' ', '')
+    company_domain = config.get('company', {}).get('domain', f"{company_name}.com")
+    
+    # Default skills for team members based on role
+    default_skills = {
+        'Developer': ['Python', 'Java', 'SQL', 'Git'],
+        'QA': ['Testing', 'Automation', 'Python', 'SQL'],
+        'DevOps': ['Docker', 'Kubernetes', 'AWS', 'CI/CD'],
+        'Product Manager': ['Agile', 'JIRA', 'Product Management', 'Stakeholder Management'],
+        'Designer': ['UI/UX', 'Figma', 'Adobe Creative Suite', 'Design Systems']
+    }
+    
+    # Valid seniority levels
+    seniority_levels = ['Junior', 'Mid-level', 'Senior', 'Lead', 'Principal']
+    
     for bu in config['business_units']:
         for team_data in bu['teams']:
             team_id = team_data.get('id', generate_id())
+            
+            # Create team members first
+            team_members_list = []
+            for member_data in team_data['team_members']:
+                member_id = member_data.get('id', generate_id())
+                role = member_data.get('role', 'Developer')
+                
+                member = TeamMember(
+                    id=member_id,
+                    name=member_data['name'],
+                    role=role,
+                    team_id=team_id,
+                    email=f"{member_data['name'].lower().replace(' ', '.')}@{company_domain}",
+                    department=bu['name'],
+                    seniority='Mid-level',  # Using a valid enum value
+                    skills=default_skills.get(role, default_skills['Developer']),
+                    join_date=datetime.now() - timedelta(days=random.randint(30, 730))
+                )
+                team_members[member_id] = member
+                team_members_list.append(member)
+            
+            # Select a manager from the team members
+            manager = random.choice(team_members_list) if team_members_list else None
+            
             team = Team(
                 id=team_id,
                 name=team_data['name'],
                 description=f"Team {team_data['name']} in {bu['name']}",
-                business_unit=bu['name']
+                business_unit=bu['name'],
+                department=bu['name'],  # Using business unit as department
+                manager_id=manager.id if manager else None,
+                members=team_members_list,
+                created_date=datetime.now() - timedelta(days=random.randint(30, 365))
             )
             teams[team_id] = team
-            
-            for member_data in team_data['team_members']:
-                member_id = member_data.get('id', generate_id())
-                member = TeamMember(
-                    id=member_id,
-                    name=member_data['name'],
-                    role=member_data.get('role', 'Developer'),
-                    team_id=team_id,
-                    email=f"{member_data['name'].lower().replace(' ', '.')}@{config['company']['domain']}"
-                )
-                team_members[member_id] = member
     
     return teams, team_members
 
@@ -77,150 +111,42 @@ def get_component_for_team(team_name: str) -> Component:
         # Default to backend if no specific match
         return Component.BACKEND
 
-def generate_tickets(teams=None, team_members=None, output_dir: str = "generated_data", num_sprints: int = 1, tickets_per_sprint: int = None, team_name: str = None, product_initiative: str = None, company_config: dict = None):
-    """Generate tickets and sprints for all teams.
+def generate_tickets(
+    team_members: Dict[str, TeamMember],
+    teams: Dict[str, Team],
+    config: dict,
+    num_sprints: int = 3,
+    tickets_per_sprint: int = 5,
+    team_name: str = None,
+    product_initiative: str = None
+) -> Tuple[List[Dict], List[Dict]]:
+    """Generate tickets for the specified team."""
+    ticket_generator = TicketGenerator(team_members, teams, config)
     
-    Args:
-        teams: Dictionary of teams to generate tickets for. If None, uses all teams from config.
-        team_members: Dictionary of team members. If None, uses all team members from config.
-        output_dir: Directory to save generated data.
-        num_sprints: Number of sprints to generate per team.
-        tickets_per_sprint: Number of tickets to generate per sprint. If None, uses default values.
-        team_name: Name of specific team to generate tickets for.
-        product_initiative: Name of product initiative to focus on.
-        company_config: Company configuration dictionary containing products and initiatives.
-    """
-    # Initialize storage
-    tickets = {}
-    sprints = {}
-    fix_versions = {}
+    if product_initiative:
+        ticket_generator.set_product_initiative(product_initiative)
     
-    # Extract teams and members from config if not provided
-    if teams is None or team_members is None:
-        teams, team_members = extract_teams_and_members(company_config)
+    # Generate sprints for the team
+    team = next((t for t in teams.values() if t.name == team_name), None) if team_name else None
+    if not team:
+        team = random.choice(list(teams.values()))
     
-    # Initialize TicketGenerator with company config
-    ticket_generator = TicketGenerator(team_members, teams, company_config)
+    sprints = ticket_generator.generate_sprints_for_team(team.id, num_sprints)
     
-    # Set the current initiative
-    ticket_generator.current_initiative = product_initiative
+    # Generate tickets for each sprint
+    all_tickets = []
+    all_sprints = []
     
-    # Generate fix versions (releases)
-    current_date = datetime.now()
-    for i in range(3):  # Generate 3 releases
-        release_date = current_date + timedelta(days=30 * (i + 1))
-        fix_version = FixVersion(
-            id=f"REL{generate_id()}",
-            name=f"Release {i + 1}.0",
-            description=f"Release {i + 1}.0 with new features and improvements",
-            release_date=release_date,
-            released=False,
-            archived=False
-        )
-        fix_versions[fix_version.id] = fix_version
-    
-    # Get target teams
-    target_teams = []
-    if team_name:
-        team = find_team_by_name(company_config, team_name)
-        if team:
-            target_teams.append(team)
-    else:
-        for bu in company_config['business_units']:
-            target_teams.extend(bu['teams'])
-    
-    # Generate tickets for each team
-    for team in target_teams:
-        print(f"Generating tickets and sprints for team {team['name']}...")
+    for sprint in sprints:
+        sprint_tickets = ticket_generator.generate_sprint_tickets(sprint.id, team.id, tickets_per_sprint)
+        all_tickets.extend(sprint_tickets)
+        all_sprints.append(sprint)
         
-        # Get appropriate component for this team
-        component = get_component_for_team(team['name'])
-        
-        # Generate sprints
-        team_sprints = []
-        sprint_start = datetime.now() - timedelta(days=90)  # Start from 90 days ago
-        
-        # Ensure at least one sprint is generated
-        num_sprints = max(1, num_sprints)
-        
-        # Create a team ID if not present
-        team_id = team.get('id', generate_id())
-        
-        for i in range(num_sprints):
-            sprint = {
-                'id': generate_id('SPR'),
-                'name': f"Sprint {i + 1}",
-                'goal': f"Complete planned work for sprint {i + 1}",
-                'description': f"Sprint {i + 1} for team {team['name']}",
-                'start_date': sprint_start + timedelta(days=i * 14),
-                'end_date': sprint_start + timedelta(days=(i + 1) * 14),
-                'status': 'ACTIVE',
-                'team_id': team_id,
-                'story_points_committed': 0,
-                'story_points_completed': 0,
-                'velocity': 0,
-                'retrospective_notes': "",
-                'tickets': []
-            }
-            team_sprints.append(sprint)
-            sprints[sprint['id']] = sprint
-        
-        # Generate tickets for each sprint
-        for sprint in team_sprints:
-            # If tickets_per_sprint is specified, adjust the generator's parameters
-            if tickets_per_sprint is not None:
-                # Calculate number of stories based on tickets_per_sprint
-                num_stories = max(1, tickets_per_sprint // 8)  # Rough estimate
-                tasks_per_story = max(1, tickets_per_sprint // (num_stories * 3))
-                subtasks_per_task = max(1, tickets_per_sprint // (num_stories * tasks_per_story * 2))
-                
-                # Generate epic for the sprint
-                epic = ticket_generator.generate_epic(component=component)
-                tickets[epic.id] = epic.model_dump()
-                sprint['tickets'].append(epic.id)
-                
-                # Generate stories
-                for i in range(num_stories):
-                    story = ticket_generator.generate_story(epic=epic, component=component)
-                    tickets[story.id] = story.model_dump()
-                    sprint['tickets'].append(story.id)
-                    
-                    # Generate tasks for the story
-                    for j in range(tasks_per_story):
-                        task = ticket_generator.generate_task(story=story, component=component)
-                        tickets[task.id] = task.model_dump()
-                        sprint['tickets'].append(task.id)
-                        
-                        # Generate subtasks for the task
-                        for k in range(subtasks_per_task):
-                            subtask = ticket_generator.generate_subtask(task=task, component=component)
-                            tickets[subtask.id] = subtask.model_dump()
-                            sprint['tickets'].append(subtask.id)
-                            
-                            # Randomly assign tickets to fix versions
-                            if random.random() < 0.7:  # 70% chance of being assigned to a release
-                                subtask_data = tickets[subtask.id]
-                                subtask_data['fix_versions'] = [random.choice(list(fix_versions.keys()))]
-                                tickets[subtask.id] = subtask_data
+        # Assign tickets to sprint
+        for ticket in sprint_tickets:
+            ticket_generator.assign_ticket_to_sprint(ticket, sprint)
     
-    # Create output directory
-    output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
-    
-    # Save generated data
-    with open(output_dir / "tickets.json", "w") as f:
-        json.dump(tickets, f, indent=2, default=str)
-    
-    with open(output_dir / "sprints.json", "w") as f:
-        json.dump(sprints, f, indent=2, default=str)
-    
-    with open(output_dir / "fix_versions.json", "w") as f:
-        json.dump({k: v.model_dump() for k, v in fix_versions.items()}, f, indent=2, default=str)
-    
-    print(f"\nGenerated {len(tickets)} tickets, {len(sprints)} sprints, and {len(fix_versions)} releases")
-    print(f"Data saved to {output_dir}")
-    
-    return tickets, sprints
+    return all_tickets, all_sprints
 
 if __name__ == "__main__":
     import argparse
@@ -237,11 +163,13 @@ if __name__ == "__main__":
     with open(args.config_file, 'r') as f:
         company_config = json.load(f)
     
+    teams, team_members = extract_teams_and_members(company_config)
     generate_tickets(
-        output_dir=args.output_dir,
+        team_members=team_members,
+        teams=teams,
+        config=company_config,
         num_sprints=args.num_sprints,
         tickets_per_sprint=args.tickets_per_sprint,
         team_name=args.team_name,
-        product_initiative=args.product_initiative,
-        company_config=company_config
+        product_initiative=args.product_initiative
     ) 

@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import os
 from openai import OpenAI
 from datetime import datetime
@@ -440,7 +440,7 @@ Please provide a helpful and constructive review comment that:
         
         return response.choices[0].message.content.strip()
 
-    def generate_story(self, component: str, parent_epic: str = None) -> str:
+    def generate_story(self, component: str, parent_epic: str = None) -> Tuple[str, int]:
         """Generate a user story description using GPT-4"""
         company_name = self.config.get('company', {}).get('name', 'the company')
         industry = self.config.get('company', {}).get('industry', 'tech')
@@ -458,8 +458,6 @@ Please provide a helpful and constructive review comment that:
         2. [Second acceptance criterion]
         3. [Third acceptance criterion]
 
-        Story Points: [number]
-
         Do not include ANY other text, sections, or formatting. The output should be exactly as shown above, with real content replacing the bracketed placeholders.
         """
         
@@ -473,12 +471,43 @@ Please provide a helpful and constructive review comment that:
             max_tokens=300
         )
         
-        return response.choices[0].message.content.strip()
+        story_content = response.choices[0].message.content.strip()
+        
+        # Generate story points separately
+        story_points_prompt = f"""Based on the following user story, determine appropriate story points (1, 2, 3, 5, 8, 13, or 21).
+        Consider complexity, effort, and risk.
+        
+        Story:
+        {story_content}
+        
+        Return ONLY the number, no additional text."""
+        
+        story_points_response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a product owner estimating story points. Return ONLY the number."},
+                {"role": "user", "content": story_points_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=10
+        )
+        
+        try:
+            story_points = int(story_points_response.choices[0].message.content.strip())
+            # Ensure story points is one of the standard values
+            standard_points = [1, 2, 3, 5, 8, 13, 21]
+            story_points = min(standard_points, key=lambda x: abs(x - story_points))
+        except (ValueError, TypeError):
+            story_points = 5  # Default to medium complexity
+        
+        return story_content, story_points
 
-    def generate_task(self, component: str, parent_story: str = None, parent_epic: str = None) -> str:
-        """Generate a task description using GPT-4"""
-        prompt = f"""Generate a concise technical task description for a {component} component in the context of {self.config['company_name']}, a {self.config['industry']} company.
-        The task should be part of the story: {parent_story} and epic: {parent_epic}
+    def generate_task(self, component: str) -> Tuple[str, int]:
+        """Generate a standalone task description using GPT-4"""
+        company_name = self.config.get('company', {}).get('name', 'the company')
+        industry = self.config.get('company', {}).get('industry', 'tech')
+        
+        prompt = f"""Generate a concise technical task description for a {component} component in the context of {company_name}, a {industry} company.
 
         Format the task exactly as follows:
         Task: [Brief task description]
@@ -488,16 +517,7 @@ Please provide a helpful and constructive review comment that:
         - [Key technical point 2]
         - [Key technical point 3]
 
-        Estimated Hours: [number]
-
-        Additional Context:
-        - Company: {self.config['company_name']}
-        - Industry: {self.config['industry']}
-        - Product: {self.config['product']}
-        - Initiative: {self.config['initiative']}
-        - Component: {component}
-
-        Keep the task description focused and technical. The estimated hours should reflect the actual development effort.
+        Keep the task description focused and technical.
         """
         
         response = self.client.chat.completions.create(
@@ -510,4 +530,126 @@ Please provide a helpful and constructive review comment that:
             max_tokens=300
         )
         
-        return response.choices[0].message.content.strip() 
+        task_content = response.choices[0].message.content.strip()
+        
+        # Generate story points separately
+        story_points_prompt = f"""Based on the following technical task, determine appropriate story points (1, 2, 3, 5, 8, 13, or 21).
+        Consider complexity, effort, and risk.
+        
+        Task:
+        {task_content}
+        
+        Return ONLY the number, no additional text."""
+        
+        story_points_response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical lead estimating story points. Return ONLY the number."},
+                {"role": "user", "content": story_points_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=10
+        )
+        
+        try:
+            story_points = int(story_points_response.choices[0].message.content.strip())
+            # Ensure story points is one of the standard values
+            standard_points = [1, 2, 3, 5, 8, 13, 21]
+            story_points = min(standard_points, key=lambda x: abs(x - story_points))
+        except (ValueError, TypeError):
+            story_points = 3  # Default to small task
+        
+        return task_content, story_points
+
+    def generate_subtask(self, task_description: str, task_id: str, parent_task: Dict[str, Any] = None) -> Tuple[str, int]:
+        """Generate a subtask description and story points based on the parent task information."""
+        company_name = self.config.get('company', {}).get('name', 'a tech company')
+        industry = self.config.get('company', {}).get('industry', 'technology')
+        
+        # Get component from parent task
+        component = parent_task.get('components', ['Backend'])[0] if parent_task else 'Backend'
+        
+        # Build context from parent task
+        parent_context = ""
+        if parent_task:
+            parent_context = f"""
+            Parent Task Context:
+            - Summary: {parent_task.get('summary', 'Not provided')}
+            - Description: {parent_task.get('description', 'Not provided')}
+            - Technical Details: {parent_task.get('technical_details', 'Not provided')}
+            - Components: {', '.join(parent_task.get('components', []))}
+            - Story Points: {parent_task.get('story_points', 'Not provided')}
+            """
+        
+        prompt = f"""You are a technical lead at {company_name} in the {industry} industry.
+        Create a detailed technical subtask that contributes to the following task:
+        
+        Task Description: {task_description}
+        
+        {parent_context}
+        
+        The subtask should:
+        1. Focus on a specific, well-defined portion of the parent task
+        2. Include detailed technical implementation steps
+        3. Specify exact testing requirements and acceptance criteria
+        4. List specific dependencies on other components or services
+        5. Include security considerations if relevant
+        6. Define code review requirements and quality standards
+        7. Be self-contained and independently implementable
+        
+        Format the response as a markdown document with the following sections:
+        ## Technical Implementation
+        [Detailed implementation steps]
+        
+        ## Testing Requirements
+        [Specific test cases and acceptance criteria]
+        
+        ## Dependencies
+        [List of specific dependencies]
+        
+        ## Security Considerations
+        [Security-related requirements if applicable]
+        
+        ## Review Requirements
+        [Code review and quality standards]
+        
+        Do not include time estimates in the description.
+        """
+        
+        subtask_description = self.generate_ticket_description(
+            title=f"Subtask for {task_id}",
+            ticket_type="Subtask",
+            component=component,
+            prompt=prompt
+        )
+        
+        # Generate story points for the subtask
+        story_points_prompt = f"""Based on the following subtask description and its parent task context, estimate the story points (1, 2, 3, 5, 8, 13, or 21).
+        Consider:
+        1. The complexity of the specific implementation
+        2. The effort required for testing and documentation
+        3. The risk level of the changes
+        4. The relationship to the parent task's story points
+        
+        Parent Task Story Points: {parent_task.get('story_points', 'Not provided') if parent_task else 'Not provided'}
+        
+        Subtask Description:
+        {subtask_description}
+        
+        Respond with ONLY the number."""
+        
+        story_points_str = self.generate_ticket_description(
+            title="Story Points Estimation",
+            ticket_type="Subtask",
+            component=component,
+            prompt=story_points_prompt
+        ).strip()
+        
+        try:
+            story_points = int(story_points_str)
+            if story_points not in [1, 2, 3, 5, 8, 13, 21]:
+                story_points = 3  # Default to 3 if not a valid value
+        except ValueError:
+            story_points = 3  # Default to 3 if conversion fails
+        
+        return subtask_description, story_points 

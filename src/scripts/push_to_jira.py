@@ -83,15 +83,19 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
         "labels": ticket_data["labels"]
     }
     
-    # Add story points if they exist (for all ticket types except Epics)
-    if ticket_data.get("story_points") and ticket_data["type"] != "Epic":
+    # Add story points if they exist (for all ticket types)
+    if ticket_data.get("story_points") is not None:
         issue_fields["customfield_10016"] = ticket_data["story_points"]  # Story Point Estimate field
     
-    # Handle parent relationships only for Stories under Epics
-    if ticket_data["type"] == "Story" and ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
-        # For Stories under Epics
+    # Handle parent relationships
+    if ticket_data.get("parent_ticket") and ticket_data.get("parent_ticket") in created_tickets:
+        # For subtasks and tasks under stories
+        parent_key = created_tickets[ticket_data["parent_ticket"]]
+        issue_fields["parent"] = {"key": parent_key}
+    elif ticket_data.get("epic_link") and ticket_data.get("epic_link") in created_tickets:
+        # For stories under epics
         epic_key = created_tickets[ticket_data["epic_link"]]
-        issue_fields["parent"] = {"key": epic_key}
+        issue_fields["customfield_10014"] = epic_key  # Epic Link field
     
     # Create the issue
     try:
@@ -148,8 +152,8 @@ def create_jira_ticket(jira: JIRA, ticket_data: Dict[str, Any], created_tickets:
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Push generated data to JIRA')
-    parser.add_argument('--input-dir', type=str, default='ticket-gen',
-                      help='Directory containing the JSON files (default: ticket-gen)')
+    parser.add_argument('--input-dir', type=str, default='generated_data',
+                      help='Directory containing the JSON files (default: generated_data)')
     args = parser.parse_args()
 
     # Load environment variables

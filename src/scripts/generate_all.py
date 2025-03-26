@@ -13,7 +13,7 @@ import random
 import uuid
 
 from src.scripts.generate_teams import generate_teams
-from src.scripts.generate_tickets import generate_tickets
+from src.scripts.generate_tickets import generate_tickets, extract_teams_and_members
 from src.scripts.generate_communication import generate_communication
 from src.models.fix_version import FixVersion
 from src.models.ticket import Sprint, SprintStatus
@@ -69,64 +69,57 @@ def create_default_sprint_and_release(teams, output_dir):
     return sprint, fix_version
 
 def main():
-    """Main function to orchestrate data generation."""
-    parser = argparse.ArgumentParser(description="Generate sample company data")
-    parser.add_argument("--batch", choices=["teams", "tickets", "communication", "all"], default="all",
-                      help="Which data to generate")
-    parser.add_argument("--output-dir", default="generated_data",
-                      help="Directory to save generated data")
-    parser.add_argument("--num-sprints", type=int, default=1,
-                      help="Number of sprints to generate per team (default: 1)")
-    parser.add_argument("--tickets-per-sprint", type=int, default=None,
-                      help="Target number of tickets to generate per sprint. If not specified, uses default generation logic.")
-    parser.add_argument("--team-name", type=str, default=None,
-                      help="Name of the team to generate tickets for. If not specified, generates for all teams.")
-    parser.add_argument("--product-initiative", type=str, default=None,
-                      help="Name of the product initiative to focus on. If not specified, uses random initiatives.")
-    parser.add_argument("--config-file", type=str, required=True,
-                      help="Path to the company configuration JSON file")
-    
+    """Main function to generate data."""
+    parser = argparse.ArgumentParser(description='Generate data for JIRA')
+    parser.add_argument('--config-file', required=True, help='Path to company configuration JSON file')
+    parser.add_argument('--batch', choices=['teams', 'tickets', 'all'], default='all', help='What data to generate')
+    parser.add_argument('--output-dir', default='generated_data', help='Directory to save generated data')
+    parser.add_argument('--num-sprints', type=int, default=1, help='Number of sprints to generate per team')
+    parser.add_argument('--tickets-per-sprint', type=int, default=5, help='Target number of tickets to generate per sprint')
+    parser.add_argument('--team-name', help='Name of specific team to generate tickets for')
+    parser.add_argument('--product-initiative', help='Name of product initiative to focus on')
     args = parser.parse_args()
     
     # Load company configuration
     print("\n=== Loading Company Configuration ===")
-    company_config = load_company_config(args.config_file)
+    with open(args.config_file, 'r') as f:
+        company_config = json.load(f)
     print(f"Loaded configuration for {company_config['company']['name']}")
     
-    # Create output directory
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(exist_ok=True)
-    
-    # Generate teams and members first if needed
-    teams = None
-    team_members = None
-    if args.batch in ["teams", "tickets", "communication", "all"]:
+    # Generate team data
+    if args.batch in ['teams', 'all']:
         print("\n=== Generating Team Data ===")
-        teams, team_members = generate_teams(args.config_file, args.output_dir)
+        print("Starting team data generation...")
+        teams, team_members = generate_teams(company_config)
+        print(f"\nTeam Generation Summary:")
+        print(f"Business Units: {len(company_config['business_units'])}")
+        print(f"Teams: {len(teams)}")
+        print(f"Team Members: {len(team_members)}")
+        print(f"\nData saved to {args.output_dir}")
     
-    if args.batch in ["tickets", "all"]:
+    # Generate ticket data
+    if args.batch in ['tickets', 'all']:
         print("\n=== Generating Ticket Data ===")
-        # Create default sprint and release first
-        sprint, fix_version = create_default_sprint_and_release(teams, args.output_dir)
-        print(f"Created default sprint {sprint.id} and release {fix_version.id}")
-        
-        # Generate tickets with the default sprint and release
+        teams, team_members = extract_teams_and_members(company_config)
         tickets, _ = generate_tickets(
-            teams, 
-            team_members, 
-            args.output_dir, 
-            args.num_sprints, 
-            args.tickets_per_sprint, 
-            args.team_name, 
-            args.product_initiative,
-            company_config
+            team_members=team_members,
+            teams=teams,
+            config=company_config,
+            num_sprints=args.num_sprints,
+            tickets_per_sprint=args.tickets_per_sprint,
+            team_name=args.team_name,
+            product_initiative=args.product_initiative
         )
-    
-    if args.batch in ["communication", "all"]:
-        print("\n=== Generating Communication Data ===")
-        generate_communication(teams, team_members, tickets, args.output_dir, company_config)
-    
-    print("\nData generation complete!")
+        
+        # Save tickets to output directory
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(exist_ok=True)
+        
+        with open(output_dir / "tickets.json", "w") as f:
+            json.dump([ticket.model_dump() for ticket in tickets], f, indent=2, default=str)
+        
+        print(f"\nGenerated {len(tickets)} tickets")
+        print(f"Data saved to {args.output_dir}")
 
 if __name__ == "__main__":
     main() 

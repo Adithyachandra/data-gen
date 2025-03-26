@@ -154,10 +154,13 @@ class Story(Ticket):
 class Task(Ticket):
     type: TicketType = TicketType.TASK
     technical_details: Optional[str] = Field(None, description="Technical implementation details")
+    story_points: Optional[int] = Field(None, description="Story points for the task")
+    estimated_hours: Optional[float] = None  # Keep for backward compatibility but mark as deprecated
 
 class Subtask(Ticket):
     type: TicketType = TicketType.SUBTASK
     parent_ticket: str = Field(..., description="ID of parent ticket (required for subtasks)")
+    story_points: Optional[int] = Field(None, description="Story points for the subtask")
 
 class Bug(Ticket):
     type: TicketType = TicketType.BUG
