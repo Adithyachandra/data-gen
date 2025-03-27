@@ -215,6 +215,19 @@ def main():
             except Exception as e:
                 print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
     
+    # Process Bug tickets
+    print("\nProcessing Bug tickets...")
+    for ticket_id, ticket_data in tickets.items():
+        if ticket_data["type"] == "Bug":
+            try:
+                jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
+                                            created_tickets, created_sprints, created_versions, fix_versions)
+                if jira_key:
+                    created_tickets[ticket_data["id"]] = jira_key
+                    print(f"Created Bug {jira_key} from {ticket_data['id']}")
+            except Exception as e:
+                print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
+    
     # Finally, create all Subtask tickets
     print("\nProcessing Subtask tickets...")
     for ticket_id, ticket_data in tickets.items():
