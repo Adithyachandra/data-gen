@@ -938,10 +938,13 @@ Make the task description detailed, realistic, and specific to the feature while
         # Extract technical details from the subtask content
         technical_details = self._extract_technical_details(subtask_description)
         
+        # Generate summary using LLM
+        summary = self.llm.generate_summary(subtask_description, "Subtask", parent_task.components[0].value if parent_task else "Backend")
+        
         subtask = Subtask(
             id=subtask_id,
             type="Sub-task",
-            summary=self._generate_summary(subtask_description),
+            summary=summary,
             description=subtask_description,
             status="In Progress",
             priority="Medium",
