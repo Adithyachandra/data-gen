@@ -78,6 +78,8 @@ def main():
     parser.add_argument('--tickets-per-sprint', type=int, default=5, help='Target number of tickets to generate per sprint')
     parser.add_argument('--team-name', help='Name of specific team to generate tickets for')
     parser.add_argument('--product-initiative', help='Name of product initiative to focus on')
+    parser.add_argument('--team-id', help='ID of specific team to generate tickets for')
+    parser.add_argument('--initiative-id', help='ID of specific initiative to focus on')
     args = parser.parse_args()
     
     # Load company configuration
@@ -90,7 +92,7 @@ def main():
     if args.batch in ['teams', 'all']:
         print("\n=== Generating Team Data ===")
         print("Starting team data generation...")
-        teams, team_members = generate_teams(company_config)
+        teams, team_members = generate_teams(args.config_file, args.output_dir)
         print(f"\nTeam Generation Summary:")
         print(f"Business Units: {len(company_config['business_units'])}")
         print(f"Teams: {len(teams)}")
@@ -100,26 +102,102 @@ def main():
     # Generate ticket data
     if args.batch in ['tickets', 'all']:
         print("\n=== Generating Ticket Data ===")
-        teams, team_members = extract_teams_and_members(company_config)
-        tickets, _ = generate_tickets(
-            team_members=team_members,
-            teams=teams,
-            config=company_config,
-            num_sprints=args.num_sprints,
-            tickets_per_sprint=args.tickets_per_sprint,
-            team_name=args.team_name,
-            product_initiative=args.product_initiative
-        )
+        print("Starting ticket data generation...")
         
-        # Save tickets to output directory
+        # Load or create teams and team members
+        if args.batch == 'tickets':
+            teams, team_members = extract_teams_and_members(company_config)
+        
+        # Filter teams if team_id is specified
+        if args.team_id:
+            if args.team_id not in teams:
+                print(f"Error: Team ID {args.team_id} not found")
+                return
+            teams = {args.team_id: teams[args.team_id]}
+            print(f"Generating tickets for specific team: {teams[args.team_id].name}")
+        
+        # Create default sprint and release if they don't exist
         output_dir = Path(args.output_dir)
         output_dir.mkdir(exist_ok=True)
         
-        with open(output_dir / "tickets.json", "w") as f:
-            json.dump([ticket.model_dump() for ticket in tickets], f, indent=2, default=str)
+        # Load existing fix versions or create a new one
+        fix_versions_file = output_dir / "fix_versions.json"
+        if fix_versions_file.exists():
+            with open(fix_versions_file, 'r') as f:
+                fix_versions = json.load(f)
+        else:
+            sprint, fix_version = create_default_sprint_and_release(teams, args.output_dir)
+            fix_versions = {fix_version.id: fix_version.model_dump()}
         
-        print(f"\nGenerated {len(tickets)} tickets")
-        print(f"Data saved to {args.output_dir}")
+        # Initialize lists for all generated data
+        all_tickets = []
+        all_sprints = []
+        
+        # Filter teams based on team_name or team_id
+        teams_to_process = teams
+        if args.team_name:
+            teams_to_process = {t.id: t for t in teams.values() if t.name == args.team_name}
+            if not teams_to_process:
+                print(f"Error: Team name '{args.team_name}' not found")
+                return
+            print(f"Generating tickets for team: {args.team_name}")
+        
+        # Filter team members to only include members of the selected team(s)
+        filtered_team_members = {
+            member_id: member 
+            for member_id, member in team_members.items() 
+            if member.team_id in teams_to_process
+        }
+        
+        for team in teams_to_process.values():
+            print(f"\nGenerating tickets for team: {team.name}")
+            tickets, sprints = generate_tickets(
+                team_members=filtered_team_members,
+                teams={team.id: team},
+                config=company_config,
+                num_sprints=args.num_sprints,
+                tickets_per_sprint=args.tickets_per_sprint,
+                team_name=team.name,
+                product_initiative=args.product_initiative,
+                initiative_id=args.initiative_id
+            )
+            
+            # Assign fix versions to tickets
+            for ticket in tickets:
+                # Randomly assign to a fix version
+                fix_version_id = random.choice(list(fix_versions.keys()))
+                ticket.fix_versions = [fix_version_id]
+            
+            all_tickets.extend(tickets)
+            all_sprints.extend(sprints)
+        
+        # Save generated data
+        print("\nSaving generated data...")
+        
+        # Save tickets
+        tickets_file = output_dir / "tickets.json"
+        with open(tickets_file, 'w') as f:
+            json.dump({ticket.id: ticket.model_dump() for ticket in all_tickets}, f, indent=2, default=str)
+        
+        # Save sprints
+        sprints_file = output_dir / "sprints.json"
+        with open(sprints_file, 'w') as f:
+            json.dump({sprint.id: sprint.model_dump() for sprint in all_sprints}, f, indent=2, default=str)
+        
+        print(f"\nTicket Generation Summary:")
+        print(f"Total Tickets: {len(all_tickets)}")
+        print(f"Total Sprints: {len(all_sprints)}")
+        print(f"Fix Versions: {len(fix_versions)}")
+        print(f"\nData saved to {args.output_dir}")
+    
+    # Generate communication data
+    if args.batch in ['all']:
+        print("\n=== Generating Communication Data ===")
+        print("Starting communication data generation...")
+        generate_communication(company_config, args.output_dir)
+        print(f"Communication data saved to {args.output_dir}")
+    
+    print("\n=== Data Generation Complete ===")
 
 if __name__ == "__main__":
     main() 

@@ -77,12 +77,15 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
         }
 
         # Add fix version if provided
-        if ticket_data.get("fix_versions") and ticket_data["fix_versions"]:
-            fix_version = ticket_data["fix_versions"][0]
-            if fix_version in created_versions:
-                issue_fields['fixVersions'] = [{'name': created_versions[fix_version]}]
+        if ticket_data.get("fix_versions"):
+            fix_versions = ticket_data["fix_versions"]
+            if isinstance(fix_versions, str):
+                fix_versions = [fix_versions]
+            
+            if fix_versions and fix_versions[0] in created_versions:
+                issue_fields['fixVersions'] = [{'name': created_versions[fix_versions[0]]}]
             else:
-                print(f"Warning: Fix version {fix_version} not found for {ticket_data['type']} {ticket_data['id']}")
+                print(f"Warning: Fix version {fix_versions[0] if fix_versions else 'None'} not found for {ticket_data['type']} {ticket_data['id']}")
 
         # Add sprint for Stories and Tasks only
         if ticket_data['type'] in ['Story', 'Task'] and ticket_data.get('sprint_id'):

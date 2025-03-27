@@ -118,35 +118,49 @@ def generate_tickets(
     num_sprints: int = 3,
     tickets_per_sprint: int = 5,
     team_name: str = None,
-    product_initiative: str = None
+    product_initiative: str = None,
+    initiative_id: str = None
 ) -> Tuple[List[Dict], List[Dict]]:
     """Generate tickets for the specified team."""
-    ticket_generator = TicketGenerator(team_members, teams, config)
-    
-    if product_initiative:
-        ticket_generator.set_product_initiative(product_initiative)
-    
-    # Generate sprints for the team
-    team = next((t for t in teams.values() if t.name == team_name), None) if team_name else None
-    if not team:
-        team = random.choice(list(teams.values()))
-    
-    sprints = ticket_generator.generate_sprints_for_team(team.id, num_sprints)
-    
-    # Generate tickets for each sprint
-    all_tickets = []
-    all_sprints = []
-    
-    for sprint in sprints:
-        sprint_tickets = ticket_generator.generate_sprint_tickets(sprint.id, team.id, tickets_per_sprint)
-        all_tickets.extend(sprint_tickets)
-        all_sprints.append(sprint)
+    try:
+        ticket_generator = TicketGenerator(team_members, teams, config)
         
-        # Assign tickets to sprint
-        for ticket in sprint_tickets:
-            ticket_generator.assign_ticket_to_sprint(ticket, sprint)
-    
-    return all_tickets, all_sprints
+        if product_initiative:
+            ticket_generator.set_product_initiative(product_initiative)
+        
+        # Generate sprints for the team
+        team = next((t for t in teams.values() if t.name == team_name), None) if team_name else None
+        if not team:
+            team = random.choice(list(teams.values()))
+        
+        sprints = ticket_generator.generate_sprints_for_team(team.id, num_sprints)
+        
+        # Generate tickets for each sprint
+        all_tickets = []
+        all_sprints = []
+        
+        for sprint in sprints:
+            try:
+                # Generate exactly the requested number of tickets per sprint
+                sprint_tickets = ticket_generator.generate_sprint_tickets(
+                    sprint.id, 
+                    team.id, 
+                    tickets_per_sprint
+                )
+                all_tickets.extend(sprint_tickets)
+                all_sprints.append(sprint)
+                
+                # Assign tickets to sprint
+                for ticket in sprint_tickets:
+                    ticket_generator.assign_ticket_to_sprint(ticket, sprint)
+            except Exception as e:
+                print(f"Error generating tickets for sprint {sprint.id}: {str(e)}")
+                continue
+        
+        return all_tickets, all_sprints
+    except Exception as e:
+        print(f"Error in ticket generation: {str(e)}")
+        return [], []
 
 if __name__ == "__main__":
     import argparse

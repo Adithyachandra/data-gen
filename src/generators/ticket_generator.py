@@ -352,53 +352,35 @@ class TicketGenerator:
             reactions={"👍": [random.choice(list(self.team_members.keys()))]}
         )
 
-    def generate_sprint(self, team_id: str, start_date: datetime = None) -> Sprint:
-        """Generate a sprint for a team."""
-        sprint_id = generate_id('SPR')
-        
-        if start_date is None:
-            start_date = datetime.now()
-        
-        duration = timedelta(days=self.sprint_duration_days)
-        
-        sprint = Sprint(
-            id=sprint_id,
-            name=f"Sprint {sprint_id}",
-            goal=f"Complete planned work for sprint {sprint_id}",
-            description=f"Sprint {sprint_id} for team {team_id}",
-            start_date=start_date,
-            end_date=start_date + duration,
-            status=SprintStatus.ACTIVE,
-            team_id=team_id,
-            story_points_committed=0,
-            story_points_completed=0,
-            velocity=0,
-            retrospective_notes=""
-        )
-        
-        self.sprints[sprint_id] = sprint
-        self.sprint_counter += 1
-        return sprint
-
-    def generate_sprints_for_team(self, team_id: str, num_sprints: int = 3) -> List[Sprint]:
-        """Generate a sequence of sprints for a team."""
+    def generate_sprints_for_team(self, team_id: str, num_sprints: int = 1) -> List[Sprint]:
+        """Generate sprints for a team."""
         sprints = []
         current_date = datetime.now()
         
-        # Generate past sprints
-        for i in range(num_sprints - 1):
-            start_date = current_date - timedelta(days=self.config.sprint_duration_days * (num_sprints - i))
-            sprint = self.generate_sprint(team_id, start_date)
-            if start_date + timedelta(days=self.config.sprint_duration_days) < current_date:
-                sprint.status = SprintStatus.COMPLETED
-                sprint.story_points_completed = int(sprint.story_points_committed * random.uniform(0.7, 1.0))
-                sprint.velocity = sprint.story_points_completed / self.config.sprint_duration_days
-                sprint.retrospective_notes = generate_paragraph(min_words=30, max_words=100, formal=True)
+        # Generate exactly the requested number of sprints
+        for i in range(num_sprints):
+            sprint_start = current_date + timedelta(days=i * self.sprint_duration_days)
+            sprint_end = sprint_start + timedelta(days=self.sprint_duration_days)
+            
+            sprint = Sprint(
+                id=f"SPR{generate_id()}",
+                name=f"Sprint {self.sprint_counter}",
+                goal=f"Complete sprint {self.sprint_counter} objectives",
+                description=f"Sprint {self.sprint_counter} for team {team_id}",
+                start_date=sprint_start,
+                end_date=sprint_end,
+                status=SprintStatus.ACTIVE if i == 0 else SprintStatus.PLANNED,
+                team_id=team_id,
+                story_points_committed=0,
+                story_points_completed=0,
+                velocity=0,
+                retrospective_notes="",
+                tickets=[]
+            )
+            
+            self.sprints[sprint.id] = sprint
             sprints.append(sprint)
-        
-        # Generate current sprint
-        current_sprint = self.generate_sprint(team_id, current_date)
-        sprints.append(current_sprint)
+            self.sprint_counter += 1
         
         return sprints
 
