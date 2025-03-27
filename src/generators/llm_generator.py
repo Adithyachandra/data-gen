@@ -333,18 +333,20 @@ Please provide a helpful and constructive review comment that:
                f"3. Action Items and Next Steps"
 
     def generate_summary(self, description: str, ticket_type: str, component: str) -> str:
-        """Generate a concise summary from a ticket description."""
-        prompt = f"""Given the following ticket description, generate a concise summary (max 100 characters) that captures the main point.
-        The ticket is of type {ticket_type} and affects the {component} component.
-        
-        Description:
+        """Generate a concise summary (less than 10 words) from a ticket description using GPT-4"""
+        prompt = f"""Generate a concise summary (less than 10 words) for a {ticket_type} ticket in the {component} component.
+        The summary should capture the essence of the following description:
+
         {description}
-        
-        Return only the summary, no additional text."""
+
+        Return ONLY the summary with no additional text, headers, or formatting. The summary must be less than 10 words."""
         
         response = self.client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "You are a technical writer creating concise ticket summaries. Return ONLY the summary with no additional content."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.7,
             max_tokens=50
         )

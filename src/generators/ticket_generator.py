@@ -180,8 +180,8 @@ class TicketGenerator:
             elif line.startswith('1.') or line.startswith('2.') or line.startswith('3.'):
                 acceptance_criteria.append(line[2:].strip())
         
-        # Generate summary from the first line (As a...)
-        summary = lines[0] + ' ' + lines[1] + ' ' + lines[2]
+        # Generate summary from description
+        summary = self.llm.generate_summary(story_content, "Story", component.value)
         
         story = Story(
             id=story_id,
