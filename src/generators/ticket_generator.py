@@ -510,29 +510,41 @@ class TicketGenerator:
         team = self.teams[team_id]
         default_component = Component.BACKEND  # Default to backend component
         
-        # Generate epic
-        epic = self.generate_epic(default_component)
-        tickets.append(epic)
+        # Calculate number of each ticket type based on distribution
+        num_epics = int(num_tickets * 0.10)  # 10% epics
+        num_stories = int(num_tickets * 0.50)  # 50% stories
+        num_tasks = int(num_tickets * 0.10)  # 10% tasks
+        num_subtasks = int(num_tickets * 0.20)  # 20% subtasks
+        num_bugs = int(num_tickets * 0.10)  # 10% bugs
         
-        # Generate stories linked to epic
-        for _ in range(num_tickets // 2):
-            story = self.generate_story(epic, default_component)
+        # Generate epics
+        for _ in range(num_epics):
+            epic = self.generate_epic(default_component)
+            epic.story_points = None  # Remove story points from epics
+            tickets.append(epic)
+        
+        # Generate stories
+        for _ in range(num_stories):
+            story = self.generate_story(epic, default_component) if num_epics > 0 else self.generate_story(None, default_component)
             tickets.append(story)
-            
-            # Generate subtasks directly linked to story
-            for _ in range(2):
-                subtask = self.generate_subtask(story, default_component)
+        
+        # Generate tasks
+        for _ in range(num_tasks):
+            task = self.generate_task(default_component)
+            tickets.append(task)
+        
+        # Generate subtasks
+        for _ in range(num_subtasks):
+            # Use either a story or task as parent
+            parent = random.choice([t for t in tickets if isinstance(t, (Story, Task))])
+            if parent:
+                subtask = self.generate_subtask(parent, default_component)
                 tickets.append(subtask)
-            
-            # Generate standalone tasks
-            for _ in range(2):
-                task = self.generate_task(default_component)
-                tickets.append(task)
-                
-                # Generate subtasks linked to task
-                for _ in range(2):
-                    subtask = self.generate_subtask(task, default_component)
-                    tickets.append(subtask)
+        
+        # Generate bugs
+        for _ in range(num_bugs):
+            bug = self.generate_bug(default_component)
+            tickets.append(bug)
         
         return tickets
 

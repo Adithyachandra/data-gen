@@ -440,6 +440,71 @@ Please provide a helpful and constructive review comment that:
         
         return response.choices[0].message.content.strip()
 
+    def extract_steps_to_reproduce(self, description: str) -> List[str]:
+        """Extract steps to reproduce from a bug description."""
+        prompt = f"""Given the following bug description, extract the steps to reproduce the issue.
+        If no explicit steps are found, generate realistic steps based on the description.
+        
+        Description:
+        {description}
+        
+        Return the steps as a JSON array of strings."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        try:
+            return json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            # Fallback to default steps if parsing fails
+            return [
+                "Navigate to the feature",
+                "Perform the action that triggers the issue",
+                "Observe the unexpected behavior"
+            ]
+
+    def extract_expected_behavior(self, description: str) -> str:
+        """Extract expected behavior from a bug description."""
+        prompt = f"""Given the following bug description, extract or generate the expected behavior.
+        If no explicit expected behavior is found, generate a realistic one based on the description.
+        
+        Description:
+        {description}
+        
+        Return only the expected behavior as a single string, no additional text."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        return response.choices[0].message.content.strip()
+
+    def extract_actual_behavior(self, description: str) -> str:
+        """Extract actual behavior from a bug description."""
+        prompt = f"""Given the following bug description, extract or generate the actual behavior.
+        If no explicit actual behavior is found, generate a realistic one based on the description.
+        
+        Description:
+        {description}
+        
+        Return only the actual behavior as a single string, no additional text."""
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=100
+        )
+        
+        return response.choices[0].message.content.strip()
+
     def generate_story(self, component: str, parent_epic: str = None) -> Tuple[str, int]:
         """Generate a user story description using GPT-4"""
         company_name = self.config.get('company', {}).get('name', 'the company')
