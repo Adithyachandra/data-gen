@@ -76,6 +76,13 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
             'issuetype': {'name': issue_type_map[ticket_data['type']]}
         }
 
+        # Add story points if available (excluding Epics)
+        if 'story_points' in ticket_data and ticket_data['type'] != 'Epic':
+            # The custom field ID for story points varies by JIRA instance
+            # This is typically 'customfield_10026' but may need to be configured
+            story_points_field = os.getenv('JIRA_STORY_POINTS_FIELD', 'customfield_10026')
+            issue_fields[story_points_field] = ticket_data['story_points']
+
         # Add fix version if provided
         if ticket_data.get("fix_versions"):
             fix_versions = ticket_data["fix_versions"]
