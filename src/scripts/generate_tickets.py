@@ -123,7 +123,8 @@ def generate_tickets(
 ) -> Tuple[List[Dict], List[Dict]]:
     """Generate tickets for the specified team."""
     try:
-        ticket_generator = TicketGenerator(team_members, teams, config)
+        # Create ticket generator with team members and teams
+        ticket_generator = TicketGenerator(team_members=team_members, teams=teams, config=config)
         
         if product_initiative:
             ticket_generator.set_product_initiative(product_initiative)

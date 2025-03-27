@@ -4,6 +4,7 @@ from openai import OpenAI
 from datetime import datetime
 import json
 from dotenv import load_dotenv
+import random
 
 class LLMGenerator:
     def __init__(self, api_key=None, config=None):
@@ -24,20 +25,20 @@ class LLMGenerator:
     def generate_ticket_description(self, title: str, ticket_type: str, component: str, prompt: str = None) -> str:
         """Generate a realistic ticket description based on the title and type."""
         if prompt:
-            system_prompt = "You are a technical writer creating detailed software development tickets."
+            system_prompt = "You are a technical writer creating detailed software development tickets. Focus on clear, concise descriptions that align with business goals and technical requirements."
             user_prompt = prompt
         else:
-            system_prompt = "You are a technical writer creating detailed software development tickets."
+            system_prompt = "You are a technical writer creating detailed software development tickets. Focus on clear, concise descriptions that align with business goals and technical requirements."
             user_prompt = f"""Generate a detailed, realistic ticket description for a software development task with the following details:
             Title: {title}
             Type: {ticket_type}
             Component: {component}
             
-            The description should include:
-            1. Background/Context
-            2. Current Behavior (if applicable)
-            3. Required Changes/Implementation Details
-            4. Acceptance Criteria
+            The description should:
+            1. Be clear and concise
+            2. Focus on business value and technical requirements
+            3. Include specific, measurable success criteria
+            4. Consider dependencies and technical constraints
             
             Format the response in markdown."""
 
@@ -508,215 +509,123 @@ Please provide a helpful and constructive review comment that:
         return response.choices[0].message.content.strip()
 
     def generate_story(self, component: str, parent_epic: str = None) -> Tuple[str, int]:
-        """Generate a user story description using GPT-4"""
-        company_name = self.config.get('company', {}).get('name', 'the company')
-        industry = self.config.get('company', {}).get('industry', 'tech')
+        """Generate a story description and story points."""
+        prompt = f"""Generate a user story for a software development task with the following context:
+        Component: {component}
+        Parent Epic: {parent_epic if parent_epic else 'Not specified'}
         
-        prompt = f"""Generate a concise user story for a {component} component in the context of {company_name}, a {industry} company.
-        The story should be part of the epic: {parent_epic}
-
-        Return EXACTLY in this format with NO headers, NO additional content, and NO markdown formatting:
-
-        As a [user type]
-        I want to [action]
-        So that [benefit]
-
-        1. [First acceptance criterion]
-        2. [Second acceptance criterion]
-        3. [Third acceptance criterion]
-
-        Do not include ANY other text, sections, or formatting. The output should be exactly as shown above, with real content replacing the bracketed placeholders.
-        """
+        The story should:
+        1. Follow the "As a [user], I want [action] so that [benefit]" format
+        2. Include 3 specific acceptance criteria
+        3. Focus on business value and user needs
+        4. Be technically feasible
         
+        Format the response in markdown."""
+
         response = self.client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a product owner creating user stories. Return ONLY the exact format specified with no additional content, headers, or formatting."},
+                {"role": "system", "content": "You are a technical writer creating user stories for software development tasks."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=300
+            max_tokens=500
         )
         
-        story_content = response.choices[0].message.content.strip()
+        story_content = response.choices[0].message.content
         
-        # Generate story points separately
-        story_points_prompt = f"""Based on the following user story, determine appropriate story points (1, 2, 3, 5, 8, 13, or 21).
-        Consider complexity, effort, and risk.
-        
-        Story:
-        {story_content}
-        
-        Return ONLY the number, no additional text."""
-        
-        story_points_response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a product owner estimating story points. Return ONLY the number."},
-                {"role": "user", "content": story_points_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=10
-        )
-        
-        try:
-            story_points = int(story_points_response.choices[0].message.content.strip())
-            # Ensure story points is one of the standard values
-            standard_points = [1, 2, 3, 5, 8, 13, 21]
-            story_points = min(standard_points, key=lambda x: abs(x - story_points))
-        except (ValueError, TypeError):
-            story_points = 5  # Default to medium complexity
+        # Generate story points (1, 2, 3, 5, 8, 13)
+        story_points = random.choice([1, 2, 3, 5, 8, 13])
         
         return story_content, story_points
 
     def generate_task(self, component: str) -> Tuple[str, int]:
-        """Generate a standalone task description using GPT-4"""
-        company_name = self.config.get('company', {}).get('name', 'the company')
-        industry = self.config.get('company', {}).get('industry', 'tech')
+        """Generate a task description and story points."""
+        prompt = f"""Generate a technical task description for a software development task with the following context:
+        Component: {component}
         
-        prompt = f"""Generate a concise technical task description for a {component} component in the context of {company_name}, a {industry} company.
-
-        Format the task exactly as follows:
-        Task: [Brief task description]
-
-        Technical Details:
-        - [Key technical point 1]
-        - [Key technical point 2]
-        - [Key technical point 3]
-
-        Keep the task description focused and technical.
-        """
+        The task should:
+        1. Focus on technical implementation details
+        2. Include specific technical requirements
+        3. Consider dependencies and constraints
+        4. Be clear and actionable
         
+        Format the response in markdown."""
+
         response = self.client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a technical lead creating development tasks. Keep tasks focused on technical implementation."},
+                {"role": "system", "content": "You are a technical writer creating task descriptions for software development tasks."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=300
+            max_tokens=500
         )
         
-        task_content = response.choices[0].message.content.strip()
+        task_content = response.choices[0].message.content
         
-        # Generate story points separately
-        story_points_prompt = f"""Based on the following technical task, determine appropriate story points (1, 2, 3, 5, 8, 13, or 21).
-        Consider complexity, effort, and risk.
-        
-        Task:
-        {task_content}
-        
-        Return ONLY the number, no additional text."""
-        
-        story_points_response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a technical lead estimating story points. Return ONLY the number."},
-                {"role": "user", "content": story_points_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=10
-        )
-        
-        try:
-            story_points = int(story_points_response.choices[0].message.content.strip())
-            # Ensure story points is one of the standard values
-            standard_points = [1, 2, 3, 5, 8, 13, 21]
-            story_points = min(standard_points, key=lambda x: abs(x - story_points))
-        except (ValueError, TypeError):
-            story_points = 3  # Default to small task
+        # Generate story points (1, 2, 3, 5, 8)
+        story_points = random.choice([1, 2, 3, 5, 8])
         
         return task_content, story_points
 
     def generate_subtask(self, task_description: str, task_id: str, parent_task: Dict[str, Any] = None) -> Tuple[str, int]:
-        """Generate a subtask description and story points based on the parent task information."""
-        company_name = self.config.get('company', {}).get('name', 'a tech company')
-        industry = self.config.get('company', {}).get('industry', 'technology')
-        
-        # Get component from parent task
-        component = parent_task.get('components', ['Backend'])[0] if parent_task else 'Backend'
-        
-        # Build context from parent task
-        parent_context = ""
-        if parent_task:
-            parent_context = f"""
-            Parent Task Context:
-            - Summary: {parent_task.get('summary', 'Not provided')}
-            - Description: {parent_task.get('description', 'Not provided')}
-            - Technical Details: {parent_task.get('technical_details', 'Not provided')}
-            - Components: {', '.join(parent_task.get('components', []))}
-            - Story Points: {parent_task.get('story_points', 'Not provided')}
-            """
-        
-        prompt = f"""You are a technical lead at {company_name} in the {industry} industry.
-        Create a detailed technical subtask that contributes to the following task:
-        
-        Task Description: {task_description}
-        
-        {parent_context}
+        """Generate a subtask description and story points."""
+        prompt = f"""Generate a subtask description for a software development task with the following context:
+        Parent Task: {task_description}
+        Parent Task ID: {task_id}
         
         The subtask should:
-        1. Focus on a specific, well-defined portion of the parent task
-        2. Include detailed technical implementation steps
-        3. Specify exact testing requirements and acceptance criteria
-        4. List specific dependencies on other components or services
-        5. Include security considerations if relevant
-        6. Define code review requirements and quality standards
-        7. Be self-contained and independently implementable
+        1. Break down a specific part of the parent task
+        2. Be focused and manageable
+        3. Include clear technical requirements
+        4. Be clear and actionable
         
-        Format the response as a markdown document with the following sections:
-        ## Technical Implementation
-        [Detailed implementation steps]
-        
-        ## Testing Requirements
-        [Specific test cases and acceptance criteria]
-        
-        ## Dependencies
-        [List of specific dependencies]
-        
-        ## Security Considerations
-        [Security-related requirements if applicable]
-        
-        ## Review Requirements
-        [Code review and quality standards]
-        
-        Do not include time estimates in the description.
-        """
-        
-        subtask_description = self.generate_ticket_description(
-            title=f"Subtask for {task_id}",
-            ticket_type="Subtask",
-            component=component,
-            prompt=prompt
+        Format the response in markdown."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer creating subtask descriptions for software development tasks."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
         )
         
-        # Generate story points for the subtask
-        story_points_prompt = f"""Based on the following subtask description and its parent task context, estimate the story points (1, 2, 3, 5, 8, 13, or 21).
-        Consider:
-        1. The complexity of the specific implementation
-        2. The effort required for testing and documentation
-        3. The risk level of the changes
-        4. The relationship to the parent task's story points
+        subtask_content = response.choices[0].message.content
         
-        Parent Task Story Points: {parent_task.get('story_points', 'Not provided') if parent_task else 'Not provided'}
+        # Generate story points (1, 2, 3)
+        story_points = random.choice([1, 2, 3])
         
-        Subtask Description:
-        {subtask_description}
+        return subtask_content, story_points
+
+    def generate_bug(self, component: str) -> Tuple[str, int]:
+        """Generate a bug description and story points."""
+        prompt = f"""Generate a bug report for a software development task with the following context:
+        Component: {component}
         
-        Respond with ONLY the number."""
+        The bug report should:
+        1. Clearly describe the issue
+        2. Include steps to reproduce
+        3. Specify expected and actual behavior
+        4. Consider technical impact
         
-        story_points_str = self.generate_ticket_description(
-            title="Story Points Estimation",
-            ticket_type="Subtask",
-            component=component,
-            prompt=story_points_prompt
-        ).strip()
+        Format the response in markdown."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a technical writer creating bug reports for software development tasks."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
         
-        try:
-            story_points = int(story_points_str)
-            if story_points not in [1, 2, 3, 5, 8, 13, 21]:
-                story_points = 3  # Default to 3 if not a valid value
-        except ValueError:
-            story_points = 3  # Default to 3 if conversion fails
+        bug_content = response.choices[0].message.content
         
-        return subtask_description, story_points 
+        # Generate story points (1, 2, 3, 5)
+        story_points = random.choice([1, 2, 3, 5])
+        
+        return bug_content, story_points 

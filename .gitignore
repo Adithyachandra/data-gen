@@ -1,3 +1,12 @@
+# Generated configuration files
+config/*_*.json
+
+# Generated data files
+generated_data/
+*.json
+!package.json
+!package-lock.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -43,5 +52,4 @@ ticket-gen/jira_mapping.json
 Thumbs.db
 
 # Project specific
-generated_data/
 *.log 
