@@ -73,11 +73,10 @@ class TicketGenerator:
                         id=user_data['accountId'],
                         name=user_data['displayName'],
                         email=email,
-                        department=Department.ENGINEERING.value,
-                        role=Role.SOFTWARE_ENGINEER.value,
-                        seniority=Seniority.MID,
-                        skills=[Skill.PYTHON.value, Skill.JAVA.value],
-                        join_date=datetime.now() - timedelta(days=random.randint(30, 730))
+                        role=user_data.get('role'),
+                        active=user_data.get('active', True),
+                        timezone=user_data.get('timeZone'),
+                        locale=user_data.get('locale')
                     )
                     self.team_members[team_member.id] = team_member
         
@@ -93,37 +92,14 @@ class TicketGenerator:
                         member_id = member_data.get('accountId')
                         if member_id and member_id in self.team_members:
                             member = self.team_members[member_id]
-                            member.team_id = team_data['id']
                             team_members_list.append(member)
-                    
-                    # Select a manager from the team members or create one
-                    manager = None
-                    if team_members_list:
-                        manager = random.choice(team_members_list)
-                    else:
-                        manager_id = generate_id()
-                        manager = TeamMember(
-                            id=manager_id,
-                            name=f"Manager of {team_data['name']}",
-                            email=f"manager.{team_data['name'].lower().replace(' ', '.')}@company.com",
-                            department=Department.ENGINEERING.value,
-                            role=Role.ENGINEERING_MANAGER.value,
-                            seniority=Seniority.SENIOR,
-                            skills=[Skill.TEAM_LEADERSHIP.value, Skill.PROJECT_MANAGEMENT.value],
-                            join_date=datetime.now() - timedelta(days=random.randint(365, 1095)),
-                            team_id=team_data['id']
-                        )
-                        self.team_members[manager.id] = manager
-                        team_members_list.append(manager)
                     
                     team = Team(
                         id=team_data['id'],
                         name=team_data['name'],
-                        department=Department.ENGINEERING.value,
-                        description=team_data.get('description', f"Team responsible for {team_data['name']}"),
-                        manager_id=manager.id,
-                        members=team_members_list,
-                        created_date=datetime.now() - timedelta(days=random.randint(30, 365))
+                        description=team_data.get('description', ''),
+                        team_type=team_data.get('teamType', 'MEMBER_INVITE'),
+                        members=team_members_list
                     )
                     self.teams[team.id] = team
 
@@ -176,25 +152,27 @@ class TicketGenerator:
         assignee = random.choice(list(self.team_members.values()))
         return reporter.id, assignee.id
 
-    def generate_epic(self, component: Component) -> Epic:
+    def generate_epic(self) -> Epic:
         """Generate an epic ticket."""
         epic_id = f"EPIC-{self.ticket_counter}"
         self.ticket_counter += 1
         reporter_id, assignee_id = self._assign_team_member()
         
         # Get team_id from the assignee
-        team_id = self.team_members[assignee_id].team_id if assignee_id in self.team_members else None
+        team_id = None
+        for team in self.teams.values():
+            if any(member.id == assignee_id for member in team.members):
+                team_id = team.id
+                break
         
         # Generate epic description using LLM
         epic_description = self._generate_epic_description(
             self.current_initiative,
-            PRODUCT_SCENARIOS,
-            self.config.get('team_focus', 'backend'),
-            self.config.get('feature', 'feature')
+            PRODUCT_SCENARIOS
         )
         
         # Generate a concise summary using LLM
-        summary = self.llm.generate_summary(epic_description, "Epic", component.value)
+        summary = self.llm.generate_summary(epic_description, "Epic")
         
         epic = Epic(
             id=epic_id,
@@ -205,7 +183,6 @@ class TicketGenerator:
             reporter_id=reporter_id,
             assignee_id=assignee_id,
             team_id=team_id,
-            components=[component],
             story_points=random.randint(8, 13),
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -214,26 +191,27 @@ class TicketGenerator:
         self.epics[epic_id] = epic
         return epic
 
-    def generate_story(self, epic: Epic, component: Component) -> Story:
+    def generate_story(self, epic: Epic) -> Story:
         """Generate a story ticket."""
         story_id = f"STORY-{self.ticket_counter}"
         self.ticket_counter += 1
         reporter_id, assignee_id = self._assign_team_member()
         
         # Get team_id from the assignee
-        team_id = self.team_members[assignee_id].team_id if assignee_id in self.team_members else None
+        team_id = None
+        for team in self.teams.values():
+            if any(member.id == assignee_id for member in team.members):
+                team_id = team.id
+                break
         
         # Generate story description using LLM
         story_description = self._generate_story_description(
-            self.config.get('feature', 'feature'),
             PRODUCT_SCENARIOS,
-            self.config.get('team_focus', 'backend'),
-            self.config.get('tech_stack', 'Python'),
             self.current_initiative
         )
         
         # Generate a concise summary using LLM
-        summary = self.llm.generate_summary(story_description, "Story", component.value)
+        summary = self.llm.generate_summary(story_description, "Story")
         
         story = Story(
             id=story_id,
@@ -245,7 +223,6 @@ class TicketGenerator:
             assignee_id=assignee_id,
             team_id=team_id,
             epic_link=epic.id,
-            components=[component],
             story_points=random.randint(3, 8),
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -254,26 +231,27 @@ class TicketGenerator:
         self.stories[story_id] = story
         return story
 
-    def generate_task(self, component: Component) -> Task:
+    def generate_task(self) -> Task:
         """Generate a task ticket."""
         task_id = f"TASK-{self.ticket_counter}"
         self.ticket_counter += 1
         reporter_id, assignee_id = self._assign_team_member()
         
         # Get team_id from the assignee
-        team_id = self.team_members[assignee_id].team_id if assignee_id in self.team_members else None
+        team_id = None
+        for team in self.teams.values():
+            if any(member.id == assignee_id for member in team.members):
+                team_id = team.id
+                break
         
         # Generate task description using LLM
         task_description = self._generate_task_description(
-            self.config.get('improvement', 'improvement'),
             PRODUCT_SCENARIOS,
-            self.config.get('team_focus', 'backend'),
-            self.config.get('tech_stack', 'Python'),
-            self.config.get('feature', 'feature')
+            self.current_initiative
         )
         
         # Generate a concise summary using LLM
-        summary = self.llm.generate_summary(task_description, "Task", component.value)
+        summary = self.llm.generate_summary(task_description, "Task")
         
         task = Task(
             id=task_id,
@@ -284,7 +262,6 @@ class TicketGenerator:
             reporter_id=reporter_id,
             assignee_id=assignee_id,
             team_id=team_id,
-            components=[component],
             story_points=random.randint(2, 5),
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -293,7 +270,7 @@ class TicketGenerator:
         self.tasks[task_id] = task
         return task
 
-    def generate_subtask(self, task: Task, component: Component) -> Subtask:
+    def generate_subtask(self, task: Task) -> Subtask:
         """Generate a subtask within a task."""
         subtask_id = generate_ticket_id("SUBTASK", self.ticket_counter)
         self.ticket_counter += 1
@@ -309,7 +286,7 @@ class TicketGenerator:
         )
         
         # Generate a concise summary using LLM
-        summary = self.llm.generate_summary(subtask_description, "Subtask", component.value)
+        summary = self.llm.generate_summary(subtask_description, "Subtask")
         
         # Assign team members
         reporter_id, assignee_id = self._assign_team_member()
@@ -323,7 +300,6 @@ class TicketGenerator:
             parent_ticket=task.id if task else None,
             reporter_id=reporter_id,
             assignee_id=assignee_id,
-            components=[component],
             created_at=datetime.now() - timedelta(days=random.randint(1, 5)),
             updated_at=datetime.now() - timedelta(days=random.randint(1, 3)),
             story_points=story_points,
@@ -333,28 +309,29 @@ class TicketGenerator:
         self.subtasks[subtask_id] = subtask
         return subtask
 
-    def generate_bug(self, component: Component, related_tickets: List[str] = None) -> Bug:
+    def generate_bug(self, related_tickets: List[str] = None) -> Bug:
         """Generate a bug ticket."""
         bug_id = f"BUG-{self.ticket_counter}"
         self.ticket_counter += 1
         reporter_id, assignee_id = self._assign_team_member()
         
         # Get team_id from the assignee
-        team_id = self.team_members[assignee_id].team_id if assignee_id in self.team_members else None
+        team_id = None
+        for team in self.teams.values():
+            if any(member.id == assignee_id for member in team.members):
+                team_id = team.id
+                break
         
         # Generate bug description using LLM
         bug_description = self._generate_bug_description(
             PRODUCT_SCENARIOS,
-            self.config.get('team_focus', 'backend'),
-            self.config.get('tech_stack', 'Python'),
-            self.config.get('feature', 'feature')
+            self.current_initiative
         )
         
         # Generate a concise summary using LLM
-        summary = self.llm.generate_summary(bug_description, "Bug", component.value)
+        summary = self.llm.generate_summary(bug_description, "Bug")
         
         # Parse the bug description to extract steps, behaviors, etc.
-        # This assumes the LLM generates a structured response with these sections
         lines = bug_description.split('\n')
         steps_to_reproduce = []
         actual_behavior = ""
@@ -396,11 +373,9 @@ class TicketGenerator:
             reporter_id=reporter_id,
             assignee_id=assignee_id,
             team_id=team_id,
-            components=[component],
             story_points=random.randint(1, 3),
             created_at=datetime.now(),
             updated_at=datetime.now(),
-            # Required Bug-specific fields
             severity=TicketPriority.HIGH,
             steps_to_reproduce=steps_to_reproduce,
             actual_behavior=actual_behavior.strip(),
@@ -413,62 +388,30 @@ class TicketGenerator:
     def generate_comment(self, ticket: Ticket, author: TeamMember) -> Comment:
         """Generate a comment for a ticket."""
         return Comment(
-            id=generate_id("COM"),
+            id=generate_id("CMT"),
             author_id=author.id,
-            content=self.llm.generate_ticket_comment(
-                ticket_description=ticket.description,
-                ticket_type=ticket.type.value,
-                author_role=author.role
-            ),
-            created_at=datetime.now() - timedelta(days=random.randint(1, 5)),
+            content="This is a sample comment.",
+            created_at=datetime.now(),
             reactions={"👍": [random.choice(list(self.team_members.keys()))]}
         )
 
     def generate_sprints_for_team(self, team_id: str, num_sprints: int) -> List[Sprint]:
         """Generate sprints for a team."""
-        if team_id not in self.teams:
-            raise ValueError(f"Team {team_id} not found")
-            
-        team = self.teams[team_id]
         sprints = []
         current_date = datetime.now()
         
-        # Generate past sprints
         for i in range(num_sprints):
-            sprint_id = generate_id("SPRINT")
-            start_date = current_date - timedelta(days=self.sprint_duration_days * (num_sprints - i))
-            end_date = start_date + timedelta(days=self.sprint_duration_days)
-            
-            # Generate a goal for the sprint
-            if self.current_initiative:
-                goal = f"Deliver key features for {self.current_initiative} initiative"
-            else:
-                goals = [
-                    "Improve system performance and reliability",
-                    "Enhance user experience and interface",
-                    "Implement new features and capabilities",
-                    "Fix critical bugs and technical debt",
-                    "Optimize system architecture",
-                    "Strengthen security measures",
-                    "Improve code quality and test coverage"
-                ]
-                goal = random.choice(goals)
-            
             sprint = Sprint(
-                id=sprint_id,
-                name=f"{team.name} Sprint {self.sprint_counter}",
-                description=f"Sprint {self.sprint_counter} for {team.name}",
-                goal=goal,
-                start_date=start_date,
-                end_date=end_date,
-                status=SprintStatus.COMPLETED if i < num_sprints - 1 else SprintStatus.ACTIVE,
-                team_id=team_id,
-                tickets=[]
+                id=generate_id("SPR"),
+                name=f"Sprint {i+1}",
+                goal=f"Complete sprint {i+1} goals",
+                start_date=current_date + timedelta(days=i*14),
+                end_date=current_date + timedelta(days=(i+1)*14),
+                status=SprintStatus.PLANNED,
+                team_id=team_id
             )
-            
-            self.sprints[sprint_id] = sprint
             sprints.append(sprint)
-            self.sprint_counter += 1
+            self.sprints[sprint.id] = sprint
         
         return sprints
 
@@ -608,7 +551,7 @@ class TicketGenerator:
         # Generate epics first (1-2 per sprint)
         num_epics = random.randint(1, 2)
         for _ in range(num_epics):
-            epic = self.generate_epic(Component.BACKEND)  # Default to backend for now
+            epic = self.generate_epic()
             self.assign_ticket_to_sprint(epic, sprint)
             tickets.append(epic)
         
@@ -616,15 +559,15 @@ class TicketGenerator:
         for _ in range(num_stories):
             if self.epics:
                 epic = random.choice(list(self.epics.values()))
-                story = self.generate_story(epic, Component.BACKEND)  # Default to backend for now
+                story = self.generate_story(epic)
             else:
-                story = self.generate_story(None, Component.BACKEND)  # Default to backend for now
+                story = self.generate_story(None)  # Default to backend for now
             self.assign_ticket_to_sprint(story, sprint)
             tickets.append(story)
         
         # Generate tasks
         for _ in range(num_tasks):
-            task = self.generate_task(Component.BACKEND)  # Default to backend for now
+            task = self.generate_task()
             self.assign_ticket_to_sprint(task, sprint)
             tickets.append(task)
         
@@ -632,13 +575,13 @@ class TicketGenerator:
         for _ in range(num_subtasks):
             if self.tasks:
                 parent_task = random.choice(list(self.tasks.values()))
-                subtask = self.generate_subtask(parent_task, Component.BACKEND)  # Default to backend for now
+                subtask = self.generate_subtask(parent_task)
                 self.assign_ticket_to_sprint(subtask, sprint)
                 tickets.append(subtask)
         
         # Generate bugs
         for _ in range(num_bugs):
-            bug = self.generate_bug(Component.BACKEND)  # Default to backend for now
+            bug = self.generate_bug()
             self.assign_ticket_to_sprint(bug, sprint)
             tickets.append(bug)
         
@@ -667,7 +610,7 @@ class TicketGenerator:
         
         # Generate epics for each component
         for component in Component:
-            epic = self.generate_epic(component)
+            epic = self.generate_epic()
             result["epics"].append(epic)
             
             # Generate sprints for each team
@@ -790,231 +733,97 @@ class TicketGenerator:
         """Set the current product initiative."""
         self.current_initiative = initiative_name
 
-    def generate_ticket(self, team, ticket_type=None, parent_epic=None):
-        """Generate a single ticket with realistic content based on team context."""
-        ticket_id = generate_id()
+    def generate_ticket(self, ticket_type: TicketType) -> Ticket:
+        """Generate a ticket of the specified type."""
+        reporter_id, assignee_id = self._assign_team_member()
         
-        # Get team's focus areas and tech stack
-        team_focus = next((t["focus_areas"] for t in self.config.DEPARTMENT_STRUCTURE["Engineering"]["teams"] 
-                          if t["name"] == team.name), [])
-        tech_stack = next((t["tech_stack"] for t in self.config.DEPARTMENT_STRUCTURE["Engineering"]["teams"] 
-                          if t["name"] == team.name), [])
-        
-        # Determine ticket type if not provided
-        if not ticket_type:
-            ticket_type = random.choice([TicketType.STORY, TicketType.BUG, TicketType.TASK])
-            if random.random() < 0.1:  # 10% chance for epic
-                ticket_type = TicketType.EPIC
-        
-        # Get relevant templates and scenarios
-        component = random.choice(team.components)
-        templates = STORY_TEMPLATES.get(component.value, {})
-        scenarios = PRODUCT_SCENARIOS["Enterprise Workflow Automation"]
-        
-        # Generate content based on ticket type
-        if ticket_type == TicketType.EPIC:
-            # Use current initiative if set, otherwise random
-            initiative_name = self.current_initiative if self.current_initiative else random.choice(list(PRODUCT_INITIATIVES.keys()))
-            initiative = PRODUCT_INITIATIVES[initiative_name]
-            # Select a specific feature from the product scenarios
-            feature = random.choice(scenarios['key_features'])
-            title = f"[{component.value}] {initiative['description']} - {feature}"
-            description = self._generate_epic_description(
-                initiative,
-                scenarios,
-                team_focus,
-                feature
-            )
-        
-        elif ticket_type == TicketType.STORY:
-            # Use current initiative's objectives for stories
-            if self.current_initiative:
-                initiative = PRODUCT_INITIATIVES[self.current_initiative]
-                objective = random.choice(initiative['objectives'])
-                # Select a specific feature and persona
-                feature = random.choice(scenarios['key_features'])
-                persona = random.choice(scenarios['user_personas'])
-                title = f"[{component.value}] {objective} for {feature}"
-                description = self._generate_story_description(
-                    objective,
-                    scenarios,
-                    team_focus,
-                    tech_stack,
-                    initiative,
-                    feature,
-                    persona
-                )
-            else:
-                # Fall back to templates if no initiative specified
-                if templates:
-                    feature = random.choice(templates["features"])
-                    persona = random.choice(scenarios['user_personas'])
-                    title = f"[{component.value}] {feature}"
-                    description = self._generate_story_description(
-                        feature,
-                        scenarios,
-                        team_focus,
-                        tech_stack,
-                        None,
-                        feature,
-                        persona
-                    )
-                else:
-                    title = f"[{component.value}] Generic story"
-                    description = "Default story description"
-        
-        elif ticket_type == TicketType.BUG:
-            feature = random.choice(scenarios['key_features'])
-            title = f"[{component.value}] Fix issue with {feature} in {random.choice(team_focus)}"
-            description = self._generate_bug_description(
-                scenarios,
-                team_focus,
-                tech_stack,
-                feature
-            )
-        
-        else:  # TASK
-            if templates:
-                improvement = random.choice(templates["improvements"])
-                feature = random.choice(scenarios['key_features'])
-                title = f"[{component.value}] {improvement} for {feature}"
-                description = self._generate_task_description(
-                    improvement,
-                    scenarios,
-                    team_focus,
-                    tech_stack,
-                    feature
-                )
-            else:
-                title = f"[{component.value}] Generic task"
-                description = "Default task description"
-        
-        # Generate story points based on complexity
-        story_points = random.choice(self.config.default_story_points)
-        
-        # Create and return the ticket
-        return Ticket(
-            id=ticket_id,
-            title=title,
-            description=description,
-            ticket_type=ticket_type,
-            status=TicketStatus.TODO,
-            priority=random.choice(list(TicketPriority)),
-            story_points=story_points,
-            components=[component],
-            epic_id=parent_epic.id if parent_epic else None
-        )
+        # Get team_id from the assignee's team
+        team_id = None
+        for team in self.teams.values():
+            if any(member.id == assignee_id for member in team.members):
+                team_id = team.id
+                break
 
-    def _generate_epic_description(self, initiative, scenarios, team_focus, feature):
+        ticket = Ticket(
+            id=generate_id("TKT"),
+            type=ticket_type,
+            summary=f"Sample {ticket_type.value} ticket",
+            description=f"This is a sample {ticket_type.value} ticket for testing purposes.",
+            status=TicketStatus.TODO,
+            priority="Medium",
+            reporter_id=reporter_id,
+            assignee_id=assignee_id,
+            team_id=team_id,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        
+        self.tickets[ticket.id] = ticket
+        return ticket
+
+    def _generate_epic_description(self, initiative, scenarios):
         """Generate a detailed epic description using GPT-4."""
         prompt = f"""Generate a detailed epic description for a software development project with the following context:
 
 Initiative: {initiative if isinstance(initiative, str) else initiative.get('description', 'Not specified')}
-Feature: {feature}
-Team Focus Areas: {team_focus}
 Objectives: {', '.join(initiative['objectives']) if isinstance(initiative, dict) and 'objectives' in initiative else 'Not specified'}
 Success Metrics: {', '.join(initiative['success_metrics']) if isinstance(initiative, dict) and 'success_metrics' in initiative else 'Not specified'}
 
-Please include:
-1. Background and context
-2. Feature focus and current pain points
-3. Objectives and success metrics
-4. Current challenges
-5. Target users and their needs
-6. Implementation areas
-7. Technical considerations
-
-Make the description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+Generate a comprehensive description that covers the initiative's goals, challenges, and implementation approach. Make it detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
 
         return self.llm.generate_ticket_description(
-            title=f"Epic: {feature}",
+            title=f"Epic: {initiative.get('description', 'Initiative') if isinstance(initiative, dict) else initiative}",
             ticket_type="Epic",
-            component="Backend",  # Default to Backend for now
             prompt=prompt
         )
 
-    def _generate_story_description(self, feature, scenarios, team_focus, tech_stack, initiative=None, specific_feature=None, persona=None):
+    def _generate_story_description(self, scenarios, initiative=None):
         """Generate a detailed story description using GPT-4."""
         prompt = f"""Generate a detailed story description for a software development project with the following context:
 
-Feature: {feature}
-Specific Feature: {specific_feature if specific_feature else feature}
-Team Focus Areas: {team_focus}
-Tech Stack: {tech_stack}
-Persona: {persona['role'] + ' - ' + ', '.join(persona['needs']) if isinstance(persona, dict) else 'Not specified'}
 Initiative: {initiative['description'] if isinstance(initiative, dict) and 'description' in initiative else 'Not specified'}
 
-Please include:
-1. User story format (As a... I want... So that...)
-2. Feature context
-3. Technical context
-4. Detailed acceptance criteria
-5. Technical requirements
-6. Performance requirements
-7. Security requirements
-8. Testing requirements
+Please follow the user story format:
+As a [type of user], I want [goal] so that [benefit]
 
-Make the description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+Then provide additional details about:
+1. Acceptance criteria
+2. Technical requirements
+3. Testing requirements
+
+Make the description detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
 
         return self.llm.generate_ticket_description(
-            title=f"Story: {feature}",
+            title=f"Story: {initiative.get('description', 'Initiative') if isinstance(initiative, dict) else initiative}",
             ticket_type="Story",
-            component="Backend",  # Default to Backend for now
             prompt=prompt
         )
 
-    def _generate_bug_description(self, scenarios, team_focus, tech_stack, feature):
+    def _generate_bug_description(self, scenarios, initiative):
         """Generate a realistic bug description using GPT-4."""
         prompt = f"""Generate a detailed bug report for a software development project with the following context:
 
-Feature: {feature}
-Team Focus Areas: {team_focus}
-Tech Stack: {tech_stack}
+Initiative: {initiative['description'] if isinstance(initiative, dict) and 'description' in initiative else 'Not specified'}
 
-Please include:
-1. Issue summary and impact
-2. Detailed steps to reproduce
-3. Expected behavior
-4. Current behavior
-5. Technical context
-6. Proposed solution
-7. Additional notes
-
-Make the bug report detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+Generate a comprehensive bug report that includes the issue description, impact, and any relevant technical details. Make it detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
 
         return self.llm.generate_ticket_description(
-            title=f"Bug: {feature}",
+            title=f"Bug: {initiative.get('description', 'Initiative') if isinstance(initiative, dict) else initiative}",
             ticket_type="Bug",
-            component="Backend",  # Default to Backend for now
             prompt=prompt
         )
 
-    def _generate_task_description(self, improvement, scenarios, team_focus, tech_stack, feature):
+    def _generate_task_description(self, scenarios, initiative):
         """Generate a detailed technical task description using GPT-4."""
         prompt = f"""Generate a detailed technical task description for a software development project with the following context:
 
-Improvement: {improvement}
-Feature: {feature}
-Team Focus Areas: {team_focus}
-Tech Stack: {tech_stack}
+Initiative: {initiative['description'] if isinstance(initiative, dict) and 'description' in initiative else 'Not specified'}
 
-Please include:
-1. Technical task summary
-2. Context and background
-3. Technical requirements
-4. Performance requirements
-5. Implementation notes
-6. Dependencies
-7. Testing requirements
-8. Documentation requirements
-9. Review requirements
-
-Make the task description detailed, realistic, and specific to the feature while keeping it generic enough to apply to any software project."""
+Generate a comprehensive technical task description that includes the implementation details, requirements, and any relevant technical considerations. Make it detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
 
         return self.llm.generate_ticket_description(
-            title=f"Task: {improvement}",
+            title=f"Task: {initiative.get('description', 'Initiative') if isinstance(initiative, dict) else initiative}",
             ticket_type="Task",
-            component="Backend",  # Default to Backend for now
             prompt=prompt
         )
 

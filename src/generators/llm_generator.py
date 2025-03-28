@@ -22,7 +22,7 @@ class LLMGenerator:
         # Store config
         self.config = config or {}
 
-    def generate_ticket_description(self, title: str, ticket_type: str, component: str, prompt: str = None) -> str:
+    def generate_ticket_description(self, title: str, ticket_type: str, prompt: str = None) -> str:
         """Generate a realistic ticket description based on the title and type."""
         if prompt:
             system_prompt = "You are a technical writer creating detailed software development tickets. Focus on clear, concise descriptions that align with business goals and technical requirements."
@@ -32,7 +32,6 @@ class LLMGenerator:
             user_prompt = f"""Generate a detailed, realistic ticket description for a software development task with the following details:
             Title: {title}
             Type: {ticket_type}
-            Component: {component}
             
             The description should:
             1. Be clear and concise
@@ -333,9 +332,9 @@ Please provide a helpful and constructive review comment that:
                f"2. Discussion Points\n" + \
                f"3. Action Items and Next Steps"
 
-    def generate_summary(self, description: str, ticket_type: str, component: str) -> str:
+    def generate_summary(self, description: str, ticket_type: str) -> str:
         """Generate a concise summary (less than 10 words) from a ticket description using GPT-4"""
-        prompt = f"""Generate a concise summary (less than 10 words) for a {ticket_type} ticket in the {component} component.
+        prompt = f"""Generate a concise summary (less than 10 words) for a {ticket_type} ticket.
         The summary should capture the essence of the following description:
 
         {description}
@@ -508,10 +507,9 @@ Please provide a helpful and constructive review comment that:
         
         return response.choices[0].message.content.strip()
 
-    def generate_story(self, component: str, parent_epic: str = None) -> Tuple[str, int]:
+    def generate_story(self, parent_epic: str = None) -> Tuple[str, int]:
         """Generate a story description and story points."""
         prompt = f"""Generate a user story for a software development task with the following context:
-        Component: {component}
         Parent Epic: {parent_epic if parent_epic else 'Not specified'}
         
         The story should:
@@ -539,10 +537,9 @@ Please provide a helpful and constructive review comment that:
         
         return story_content, story_points
 
-    def generate_task(self, component: str) -> Tuple[str, int]:
+    def generate_task(self) -> Tuple[str, int]:
         """Generate a task description and story points."""
-        prompt = f"""Generate a technical task description for a software development task with the following context:
-        Component: {component}
+        prompt = """Generate a technical task description for a software development task.
         
         The task should:
         1. Focus on technical implementation details
@@ -600,10 +597,9 @@ Please provide a helpful and constructive review comment that:
         
         return subtask_content, story_points
 
-    def generate_bug(self, component: str) -> Tuple[str, int]:
+    def generate_bug(self) -> Tuple[str, int]:
         """Generate a bug description and story points."""
-        prompt = f"""Generate a bug report for a software development task with the following context:
-        Component: {component}
+        prompt = """Generate a bug report for a software development task.
         
         The bug report should:
         1. Clearly describe the issue

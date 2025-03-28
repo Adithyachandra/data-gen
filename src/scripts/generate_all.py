@@ -146,7 +146,8 @@ def main():
         filtered_team_members = {
             member_id: member 
             for member_id, member in team_members.items() 
-            if member.team_id in teams_to_process
+            for team in teams_to_process.values()
+            if any(m.id == member.id for m in team.members)
         }
         
         for team in teams_to_process.values():

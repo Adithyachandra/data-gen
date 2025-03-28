@@ -53,11 +53,8 @@ def extract_teams_and_members(config):
                     id=user_data['accountId'],
                     name=user_data['displayName'],
                     email=email,
-                    department=Department.ENGINEERING.value,
                     role=Role.SOFTWARE_ENGINEER.value,
-                    seniority=Seniority.MID,
-                    skills=[Skill.PYTHON.value, Skill.JAVA.value],
-                    join_date=datetime.now() - timedelta(days=random.randint(30, 730))
+                    active=True
                 )
                 team_members[member.id] = member
     
@@ -73,37 +70,13 @@ def extract_teams_and_members(config):
                     member_id = member_data.get('accountId')
                     if member_id and member_id in team_members:
                         member = team_members[member_id]
-                        member.team_id = team_data['id']
                         team_members_list.append(member)
-                
-                # Select a manager from the team members or create one
-                manager = None
-                if team_members_list:
-                    manager = random.choice(team_members_list)
-                else:
-                    manager_id = generate_id()
-                    manager = TeamMember(
-                        id=manager_id,
-                        name=f"Manager of {team_data['name']}",
-                        email=f"manager.{team_data['name'].lower().replace(' ', '.')}@company.com",
-                        department=Department.ENGINEERING.value,
-                        role=Role.ENGINEERING_MANAGER.value,
-                        seniority=Seniority.SENIOR,
-                        skills=[Skill.TEAM_LEADERSHIP.value, Skill.PROJECT_MANAGEMENT.value],
-                        join_date=datetime.now() - timedelta(days=random.randint(365, 1095)),
-                        team_id=team_data['id']
-                    )
-                    team_members[manager.id] = manager
-                    team_members_list.append(manager)
                 
                 team = Team(
                     id=team_data['id'],
                     name=team_data['name'],
-                    department=Department.ENGINEERING.value,
-                    description=team_data.get('description', f"Team responsible for {team_data['name']}"),
-                    manager_id=manager.id,
-                    members=team_members_list,
-                    created_date=datetime.now() - timedelta(days=random.randint(30, 365))
+                    description=team_data.get('description', ''),
+                    members=team_members_list
                 )
                 teams[team.id] = team
     

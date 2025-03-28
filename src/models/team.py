@@ -148,37 +148,19 @@ class Seniority(str, Enum):
     PRINCIPAL = "Principal"
 
 class TeamMember(BaseModel):
-    id: str
-    name: str
-    email: str
-    department: str
-    role: str
-    seniority: Seniority
-    skills: List[str]
-    join_date: datetime
-    reports_to: Optional[str] = None
-    direct_reports: List[str] = []
-    certifications: List[str] = []
-    languages: List[str] = []
-    office_location: Optional[str] = None
-    is_remote: bool = False
-    team_id: Optional[str] = None
+    id: str = Field(..., description="JIRA account ID")
+    name: str = Field(..., description="Display name from JIRA")
+    email: Optional[str] = Field(None, description="Email address from JIRA")
+    role: Optional[str] = Field(None, description="Role from JIRA")
+    active: bool = Field(True, description="Whether the user is active in JIRA")
+    timezone: Optional[str] = Field(None, description="Timezone from JIRA")
+    locale: Optional[str] = Field(None, description="Locale from JIRA")
 
 class Team(BaseModel):
-    id: str
-    name: str
-    department: str
-    description: str
-    manager_id: str
-    members: List[TeamMember]
-    tech_stack: List[str] = []
-    created_date: datetime
-    mission: Optional[str] = None
-    objectives: List[str] = []
-    timezone: str = "UTC"
-    is_virtual: bool = False
-    components: List[str] = []
-    current_projects: List[str] = []
+    id: str = Field(..., description="JIRA team ID")
+    name: str = Field(..., description="Team name from JIRA")
+    description: Optional[str] = Field(None, description="Team description from JIRA")
+    members: List[TeamMember] = Field(default_factory=list, description="Team members from JIRA")
 
 class BusinessUnit(BaseModel):
     id: str
