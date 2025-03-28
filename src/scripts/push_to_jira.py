@@ -82,6 +82,18 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
         if ticket_data.get('assignee_id'):
             issue_fields['assignee'] = {'accountId': ticket_data['assignee_id']}
 
+        # Add team information for all ticket types except subtasks
+        if ticket_data['type'] != 'Sub-task' and ticket_data.get('team_id'):
+            # The custom field ID for team varies by JIRA instance
+            # This is typically 'customfield_10001' but may need to be configured
+            team_field = os.getenv('JIRA_TEAM_FIELD', 'customfield_10001')
+            print(f"Setting team field for {ticket_data['type']} {ticket_data['id']}")
+            print(f"Team field name: {team_field}")
+            print(f"Team ID: {ticket_data['team_id']}")
+            # Set the team ID directly as per Atlassian Teams API documentation
+            issue_fields[team_field] = ticket_data['team_id']
+            print(f"Updated issue fields: {json.dumps(issue_fields, indent=2)}")
+
         # Add story points if available (excluding Epics)
         if 'story_points' in ticket_data and ticket_data['type'] != 'Epic':
             # The custom field ID for story points varies by JIRA instance
