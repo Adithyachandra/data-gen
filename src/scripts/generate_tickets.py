@@ -15,7 +15,7 @@ import uuid
 from src.generators.ticket_generator import TicketGenerator
 from src.models.ticket import Component
 from src.models.fix_version import FixVersion
-from src.models.team import Team, TeamMember
+from src.models.team import Team, TeamMember, Department, Role, Seniority, Skill
 
 def generate_id(prefix: str = None):
     """Generate a unique ID with an optional prefix."""
@@ -23,72 +23,89 @@ def generate_id(prefix: str = None):
     return f"{prefix}-{id}" if prefix else id
 
 def find_team_by_name(config, team_name):
-    """Find a team by name in the config."""
-    for bu in config['business_units']:
-        for team in bu['teams']:
-            if team['name'] == team_name:
-                return team
+    """Find a team by name in the JIRA data."""
+    teams_file = "user_data/jira_teams_20250328_104736.json"
+    if os.path.exists(teams_file):
+        with open(teams_file, 'r') as f:
+            teams_data = json.load(f)
+            for team_data in teams_data:
+                if team_data['name'] == team_name:
+                    return team_data
     return None
 
 def extract_teams_and_members(config):
-    """Extract teams and team members from config."""
+    """Extract teams and team members from JIRA data."""
     teams = {}
     team_members = {}
     
-    # Get company domain or use a default
-    company_name = config.get('company', {}).get('name', 'company').lower().replace(' ', '')
-    company_domain = config.get('company', {}).get('domain', f"{company_name}.com")
-    
-    # Default skills for team members based on role
-    default_skills = {
-        'Developer': ['Python', 'Java', 'SQL', 'Git'],
-        'QA': ['Testing', 'Automation', 'Python', 'SQL'],
-        'DevOps': ['Docker', 'Kubernetes', 'AWS', 'CI/CD'],
-        'Product Manager': ['Agile', 'JIRA', 'Product Management', 'Stakeholder Management'],
-        'Designer': ['UI/UX', 'Figma', 'Adobe Creative Suite', 'Design Systems']
-    }
-    
-    # Valid seniority levels
-    seniority_levels = ['Junior', 'Mid-level', 'Senior', 'Lead', 'Principal']
-    
-    for bu in config['business_units']:
-        for team_data in bu['teams']:
-            team_id = team_data.get('id', generate_id())
-            
-            # Create team members first
-            team_members_list = []
-            for member_data in team_data['team_members']:
-                member_id = member_data.get('id', generate_id())
-                role = member_data.get('role', 'Developer')
+    # Load users data from JIRA first
+    users_file = "user_data/jira_users_20250328_104736.json"
+    if os.path.exists(users_file):
+        with open(users_file, 'r') as f:
+            users_data = json.load(f)
+            for user_data in users_data:
+                # Generate a valid email if none exists
+                email = user_data.get('emailAddress')
+                if not email:
+                    email = f"{user_data['displayName'].lower().replace(' ', '.')}@company.com"
                 
                 member = TeamMember(
-                    id=member_id,
-                    name=member_data['name'],
-                    role=role,
-                    team_id=team_id,
-                    email=f"{member_data['name'].lower().replace(' ', '.')}@{company_domain}",
-                    department=bu['name'],
-                    seniority='Mid-level',  # Using a valid enum value
-                    skills=default_skills.get(role, default_skills['Developer']),
+                    id=user_data['accountId'],
+                    name=user_data['displayName'],
+                    email=email,
+                    department=Department.ENGINEERING.value,
+                    role=Role.SOFTWARE_ENGINEER.value,
+                    seniority=Seniority.MID,
+                    skills=[Skill.PYTHON.value, Skill.JAVA.value],
                     join_date=datetime.now() - timedelta(days=random.randint(30, 730))
                 )
-                team_members[member_id] = member
-                team_members_list.append(member)
-            
-            # Select a manager from the team members
-            manager = random.choice(team_members_list) if team_members_list else None
-            
-            team = Team(
-                id=team_id,
-                name=team_data['name'],
-                description=f"Team {team_data['name']} in {bu['name']}",
-                business_unit=bu['name'],
-                department=bu['name'],  # Using business unit as department
-                manager_id=manager.id if manager else None,
-                members=team_members_list,
-                created_date=datetime.now() - timedelta(days=random.randint(30, 365))
-            )
-            teams[team_id] = team
+                team_members[member.id] = member
+    
+    # Load teams data from JIRA
+    teams_file = "user_data/jira_teams_20250328_104736.json"
+    if os.path.exists(teams_file):
+        with open(teams_file, 'r') as f:
+            teams_data = json.load(f)
+            for team_data in teams_data:
+                # Get team members
+                team_members_list = []
+                for member_data in team_data.get('members', []):
+                    member_id = member_data.get('accountId')
+                    if member_id and member_id in team_members:
+                        member = team_members[member_id]
+                        member.team_id = team_data['id']
+                        team_members_list.append(member)
+                
+                # Select a manager from the team members or create one
+                manager = None
+                if team_members_list:
+                    manager = random.choice(team_members_list)
+                else:
+                    manager_id = generate_id()
+                    manager = TeamMember(
+                        id=manager_id,
+                        name=f"Manager of {team_data['name']}",
+                        email=f"manager.{team_data['name'].lower().replace(' ', '.')}@company.com",
+                        department=Department.ENGINEERING.value,
+                        role=Role.ENGINEERING_MANAGER.value,
+                        seniority=Seniority.SENIOR,
+                        skills=[Skill.TEAM_LEADERSHIP.value, Skill.PROJECT_MANAGEMENT.value],
+                        join_date=datetime.now() - timedelta(days=random.randint(365, 1095)),
+                        team_id=team_data['id']
+                    )
+                    team_members[manager.id] = manager
+                    team_members_list.append(manager)
+                
+                team = Team(
+                    id=team_data['id'],
+                    name=team_data['name'],
+                    department=Department.ENGINEERING.value,
+                    description=team_data.get('description', f"Team responsible for {team_data['name']}"),
+                    manager_id=manager.id,
+                    members=team_members_list,
+                    created_date=datetime.now() - timedelta(days=random.randint(30, 365))
+                )
+                teams[team.id] = team
     
     return teams, team_members
 
@@ -123,8 +140,8 @@ def generate_tickets(
 ) -> Tuple[List[Dict], List[Dict]]:
     """Generate tickets for the specified team."""
     try:
-        # Create ticket generator with team members and teams
-        ticket_generator = TicketGenerator(team_members=team_members, teams=teams, config=config)
+        # Create ticket generator with config
+        ticket_generator = TicketGenerator(config=config)
         
         if product_initiative:
             ticket_generator.set_product_initiative(product_initiative)

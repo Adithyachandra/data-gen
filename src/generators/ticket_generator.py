@@ -2,13 +2,15 @@ from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta
 import random
 import uuid
+import json
+import os
 
 from src.models.ticket import (
     Ticket, Epic, Story, Task, Subtask, Bug,
     TicketType, TicketStatus, TicketPriority, Component,
     Comment, FixVersion, Sprint, SprintStatus, TicketRelationType
 )
-from src.models.team import TeamMember, Team
+from src.models.team import TeamMember, Team, Department, Role, Seniority, Skill
 from src.generators.utils import (
     generate_id, generate_ticket_id, random_date_between,
     weighted_choice, generate_paragraph, random_subset
@@ -17,10 +19,10 @@ from src.config.sample_company import INNOVATECH_CONFIG, PRODUCT_INITIATIVES, PR
 from src.generators.llm_generator import LLMGenerator
 
 class TicketGenerator:
-    def __init__(self, team_members: Dict[str, TeamMember], teams: Dict[str, Team], config: dict):
+    def __init__(self, config: dict):
         self.config = config
-        self.team_members = team_members  # Keep team members for assignment only
-        self.teams = teams  # Keep teams for assignment only
+        self.team_members: Dict[str, TeamMember] = {}
+        self.teams: Dict[str, Team] = {}
         self.tickets: Dict[str, Ticket] = {}
         self.epics: Dict[str, Epic] = {}
         self.stories: Dict[str, Story] = {}
@@ -50,6 +52,80 @@ class TicketGenerator:
         self.llm = LLMGenerator(config=config)
 
         self.sprint_duration_days = config.get('sprint_duration_days', 14)  # Default to 2 weeks
+        
+        # Load JIRA data
+        self._load_jira_data()
+
+    def _load_jira_data(self):
+        """Load team and user data from JIRA JSON files."""
+        # Load users data first
+        users_file = "user_data/jira_users_20250328_104736.json"
+        if os.path.exists(users_file):
+            with open(users_file, 'r') as f:
+                users_data = json.load(f)
+                for user_data in users_data:
+                    # Generate a valid email if none exists
+                    email = user_data.get('emailAddress')
+                    if not email:
+                        email = f"{user_data['displayName'].lower().replace(' ', '.')}@company.com"
+                    
+                    team_member = TeamMember(
+                        id=user_data['accountId'],
+                        name=user_data['displayName'],
+                        email=email,
+                        department=Department.ENGINEERING.value,
+                        role=Role.SOFTWARE_ENGINEER.value,
+                        seniority=Seniority.MID,
+                        skills=[Skill.PYTHON.value, Skill.JAVA.value],
+                        join_date=datetime.now() - timedelta(days=random.randint(30, 730))
+                    )
+                    self.team_members[team_member.id] = team_member
+        
+        # Load teams data
+        teams_file = "user_data/jira_teams_20250328_104736.json"
+        if os.path.exists(teams_file):
+            with open(teams_file, 'r') as f:
+                teams_data = json.load(f)
+                for team_data in teams_data:
+                    # Get team members
+                    team_members_list = []
+                    for member_data in team_data.get('members', []):
+                        member_id = member_data.get('accountId')
+                        if member_id and member_id in self.team_members:
+                            member = self.team_members[member_id]
+                            member.team_id = team_data['id']
+                            team_members_list.append(member)
+                    
+                    # Select a manager from the team members or create one
+                    manager = None
+                    if team_members_list:
+                        manager = random.choice(team_members_list)
+                    else:
+                        manager_id = generate_id()
+                        manager = TeamMember(
+                            id=manager_id,
+                            name=f"Manager of {team_data['name']}",
+                            email=f"manager.{team_data['name'].lower().replace(' ', '.')}@company.com",
+                            department=Department.ENGINEERING.value,
+                            role=Role.ENGINEERING_MANAGER.value,
+                            seniority=Seniority.SENIOR,
+                            skills=[Skill.TEAM_LEADERSHIP.value, Skill.PROJECT_MANAGEMENT.value],
+                            join_date=datetime.now() - timedelta(days=random.randint(365, 1095)),
+                            team_id=team_data['id']
+                        )
+                        self.team_members[manager.id] = manager
+                        team_members_list.append(manager)
+                    
+                    team = Team(
+                        id=team_data['id'],
+                        name=team_data['name'],
+                        department=Department.ENGINEERING.value,
+                        description=team_data.get('description', f"Team responsible for {team_data['name']}"),
+                        manager_id=manager.id,
+                        members=team_members_list,
+                        created_date=datetime.now() - timedelta(days=random.randint(30, 365))
+                    )
+                    self.teams[team.id] = team
 
     def _generate_fix_versions(self) -> Dict[str, FixVersion]:
         """Generate fix versions for the project."""
@@ -94,6 +170,8 @@ class TicketGenerator:
 
     def _assign_team_member(self) -> Tuple[str, str]:
         """Assign a random team member as reporter and assignee."""
+        if not self.team_members:
+            raise ValueError("No team members available for assignment")
         reporter = random.choice(list(self.team_members.values()))
         assignee = random.choice(list(self.team_members.values()))
         return reporter.id, assignee.id
@@ -364,32 +442,49 @@ class TicketGenerator:
 
     def generate_sprints_for_team(self, team_id: str, num_sprints: int) -> List[Sprint]:
         """Generate sprints for a team."""
+        if team_id not in self.teams:
+            raise ValueError(f"Team {team_id} not found")
+            
+        team = self.teams[team_id]
         sprints = []
         current_date = datetime.now()
         
+        # Generate past sprints
         for i in range(num_sprints):
-            sprint_id = f"SPR{uuid.uuid4().hex[:8]}"
-            sprint_start = current_date + timedelta(days=i * self.sprint_duration_days)
-            sprint_end = sprint_start + timedelta(days=self.sprint_duration_days)
+            sprint_id = generate_id("SPRINT")
+            start_date = current_date - timedelta(days=self.sprint_duration_days * (num_sprints - i))
+            end_date = start_date + timedelta(days=self.sprint_duration_days)
+            
+            # Generate a goal for the sprint
+            if self.current_initiative:
+                goal = f"Deliver key features for {self.current_initiative} initiative"
+            else:
+                goals = [
+                    "Improve system performance and reliability",
+                    "Enhance user experience and interface",
+                    "Implement new features and capabilities",
+                    "Fix critical bugs and technical debt",
+                    "Optimize system architecture",
+                    "Strengthen security measures",
+                    "Improve code quality and test coverage"
+                ]
+                goal = random.choice(goals)
             
             sprint = Sprint(
                 id=sprint_id,
-                name=f"Sprint {i + 1}",
-                goal=f"Complete planned work for sprint {i + 1}",
-                description=f"Sprint {i + 1} for team {team_id}",
-                start_date=sprint_start,
-                end_date=sprint_end,
-                status=SprintStatus.ACTIVE,
+                name=f"{team.name} Sprint {self.sprint_counter}",
+                description=f"Sprint {self.sprint_counter} for {team.name}",
+                goal=goal,
+                start_date=start_date,
+                end_date=end_date,
+                status=SprintStatus.COMPLETED if i < num_sprints - 1 else SprintStatus.ACTIVE,
                 team_id=team_id,
-                story_points_committed=0,
-                story_points_completed=0,
-                velocity=0,
-                retrospective_notes="",
                 tickets=[]
             )
             
             self.sprints[sprint_id] = sprint
             sprints.append(sprint)
+            self.sprint_counter += 1
         
         return sprints
 
@@ -510,41 +605,69 @@ class TicketGenerator:
 
     def generate_sprint_tickets(self, sprint_id: str, team_id: str, num_tickets: int) -> List[Ticket]:
         """Generate tickets for a sprint."""
+        if sprint_id not in self.sprints:
+            raise ValueError(f"Sprint {sprint_id} not found")
+            
+        if team_id not in self.teams:
+            raise ValueError(f"Team {team_id} not found")
+            
+        sprint = self.sprints[sprint_id]
+        team = self.teams[team_id]
         tickets = []
-        component = Component.FRONTEND  # Default to frontend for website development
         
-        # Generate one epic per sprint
-        epic = self.generate_epic(component)
-        tickets.append(epic)
+        # Calculate number of each ticket type
+        num_stories = int(num_tickets * 0.4)  # 40% stories
+        num_tasks = int(num_tickets * 0.3)    # 30% tasks
+        num_subtasks = int(num_tickets * 0.2)  # 20% subtasks
+        num_bugs = num_tickets - (num_stories + num_tasks + num_subtasks)  # Remaining as bugs
         
-        # Calculate number of each ticket type based on distribution
-        num_stories = int(num_tickets * 0.5)  # 50% stories
-        num_tasks = int(num_tickets * 0.1)    # 10% tasks
-        num_subtasks = int(num_tickets * 0.2) # 20% subtasks
-        num_bugs = int(num_tickets * 0.1)     # 10% bugs
+        # Generate epics first (1-2 per sprint)
+        num_epics = random.randint(1, 2)
+        for _ in range(num_epics):
+            epic = self.generate_epic(Component.BACKEND)  # Default to backend for now
+            self.assign_ticket_to_sprint(epic, sprint)
+            tickets.append(epic)
         
         # Generate stories
         for _ in range(num_stories):
-            story = self.generate_story(epic, component)
+            if self.epics:
+                epic = random.choice(list(self.epics.values()))
+                story = self.generate_story(epic, Component.BACKEND)  # Default to backend for now
+            else:
+                story = self.generate_story(None, Component.BACKEND)  # Default to backend for now
+            self.assign_ticket_to_sprint(story, sprint)
             tickets.append(story)
         
         # Generate tasks
         for _ in range(num_tasks):
-            task = self.generate_task(component)
+            task = self.generate_task(Component.BACKEND)  # Default to backend for now
+            self.assign_ticket_to_sprint(task, sprint)
             tickets.append(task)
         
-        # Generate subtasks (linked to random tasks)
-        tasks = [t for t in tickets if isinstance(t, Task)]
-        if tasks:
-            for _ in range(num_subtasks):
-                parent_task = random.choice(tasks)
-                subtask = self.generate_subtask(parent_task, component)
+        # Generate subtasks
+        for _ in range(num_subtasks):
+            if self.tasks:
+                parent_task = random.choice(list(self.tasks.values()))
+                subtask = self.generate_subtask(parent_task, Component.BACKEND)  # Default to backend for now
+                self.assign_ticket_to_sprint(subtask, sprint)
                 tickets.append(subtask)
         
         # Generate bugs
         for _ in range(num_bugs):
-            bug = self.generate_bug(component)
+            bug = self.generate_bug(Component.BACKEND)  # Default to backend for now
+            self.assign_ticket_to_sprint(bug, sprint)
             tickets.append(bug)
+        
+        # Create dependencies between tickets
+        self._create_dependencies(tickets[0], tickets[1:])
+        
+        # Handle clones and duplicates
+        self._handle_clones_and_duplicates(tickets)
+        
+        # Handle implementations
+        stories = [t for t in tickets if isinstance(t, Story)]
+        tasks = [t for t in tickets if isinstance(t, Task)]
+        self._handle_implementations(stories, tasks)
         
         return tickets
 
