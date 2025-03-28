@@ -35,7 +35,7 @@ def generate_company_structure(llm: LLMGenerator, company_info: Dict[str, str]) 
     elif "asia" in description and "india" not in description:
         location = "Asia"
     
-    prompt = f"""Based on the following company information, generate a detailed company configuration with business units, teams, products, and initiatives.
+    prompt = f"""Based on the following company information, generate a detailed company configuration with products and initiatives.
 
 Company Name: {company_info['name']}
 Description: {company_info['description']}
@@ -44,25 +44,6 @@ Location: {location}
 
 Generate a JSON structure that MUST follow this exact format:
 {{
-    "business_units": [
-        {{
-            "name": "string",
-            "description": "string",
-            "teams": [
-                {{
-                    "name": "string",
-                    "description": "string",
-                    "size": number,
-                    "team_members": [
-                        {{
-                            "name": "string",
-                            "role": "string"
-                        }}
-                    ]
-                }}
-            ]
-        }}
-    ],
     "products": [
         {{
             "name": "string",
@@ -78,23 +59,13 @@ Generate a JSON structure that MUST follow this exact format:
 }}
 
 Requirements:
-1. Business Units (2-4):
-   - Each business unit should have a detailed description of its purpose and responsibilities
-   - Include 2-3 teams per business unit
-
-2. Teams:
-   - Each team should have 5-15 members
-   - The number of team_members MUST exactly match the team's size field
-   - Provide detailed team responsibilities and focus areas
-   - Team member roles should be specific (e.g., "Senior Frontend Developer", "DevOps Engineer", "Product Manager")
-   - Use realistic names appropriate for the company's location ({location})
-
-3. Products (1-2):
+1. Products (1-2):
    - Include detailed product features and purpose
    - Each product should have 2-3 initiatives
 
-4. Initiatives:
+2. Initiatives:
    - Each initiative should have clear goals and expected outcomes
+   - Initiatives should be realistic and aligned with the company's industry
 
 The structure should be realistic and aligned with the company's industry and description.
 IMPORTANT: Return ONLY the JSON object, no additional text or explanation."""
@@ -103,7 +74,7 @@ IMPORTANT: Return ONLY the JSON object, no additional text or explanation."""
     response = llm.client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are a business analyst expert at generating realistic company structures. You must return ONLY valid JSON that matches the exact structure provided, with no additional text. Use realistic names appropriate for the company's location."},
+            {"role": "system", "content": "You are a business analyst expert at generating realistic company structures. You must return ONLY valid JSON that matches the exact structure provided, with no additional text."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.7,
@@ -133,16 +104,10 @@ IMPORTANT: Return ONLY the JSON object, no additional text or explanation."""
             raise
     
     # Validate the structure has required fields
-    required_fields = ['business_units', 'products']
+    required_fields = ['products']
     missing_fields = [field for field in required_fields if field not in structure]
     if missing_fields:
         raise ValueError(f"Generated structure missing required fields: {missing_fields}")
-    
-    # Validate team member counts match team sizes
-    for bu in structure['business_units']:
-        for team in bu['teams']:
-            if len(team['team_members']) != team['size']:
-                raise ValueError(f"Team member count ({len(team['team_members'])}) does not match team size ({team['size']}) for team {team['name']}")
     
     return structure
 
