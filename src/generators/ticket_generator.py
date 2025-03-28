@@ -204,10 +204,11 @@ class TicketGenerator:
                 team_id = team.id
                 break
         
-        # Generate story description using LLM
+        # Generate story description using LLM with epic context
         story_description = self._generate_story_description(
             PRODUCT_SCENARIOS,
-            self.current_initiative
+            self.current_initiative,
+            epic.description if epic else None
         )
         
         # Generate a concise summary using LLM
@@ -222,7 +223,7 @@ class TicketGenerator:
             reporter_id=reporter_id,
             assignee_id=assignee_id,
             team_id=team_id,
-            epic_link=epic.id,
+            epic_link=epic.id if epic else None,
             story_points=random.randint(3, 8),
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -777,11 +778,13 @@ Generate a comprehensive description that covers the initiative's goals, challen
             prompt=prompt
         )
 
-    def _generate_story_description(self, scenarios, initiative=None):
+    def _generate_story_description(self, scenarios, initiative=None, epic_description=None):
         """Generate a detailed story description using GPT-4."""
         prompt = f"""Generate a detailed story description for a software development project with the following context:
 
 Initiative: {initiative['description'] if isinstance(initiative, dict) and 'description' in initiative else 'Not specified'}
+
+Epic Description: {epic_description if epic_description else 'Not specified'}
 
 Please follow the user story format:
 As a [type of user], I want [goal] so that [benefit]
@@ -789,7 +792,7 @@ As a [type of user], I want [goal] so that [benefit]
 Then provide additional details about:
 1. Acceptance criteria
 
-Make the description detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
+Make the description detailed, realistic, and specific to the epic and initiative while keeping it generic enough to apply to any software project. If an epic description is provided, ensure the story aligns with the epic's goals and scope."""
 
         return self.llm.generate_ticket_description(
             title=f"Story: {initiative.get('description', 'Initiative') if isinstance(initiative, dict) else initiative}",
