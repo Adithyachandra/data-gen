@@ -788,8 +788,6 @@ As a [type of user], I want [goal] so that [benefit]
 
 Then provide additional details about:
 1. Acceptance criteria
-2. Technical requirements
-3. Testing requirements
 
 Make the description detailed, realistic, and specific to the initiative while keeping it generic enough to apply to any software project."""
 
