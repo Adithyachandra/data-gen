@@ -1,0 +1,53 @@
+[
+  {
+    "id": "6aae76a7-5487-4c3f-86ab-88b742ae122b",
+    "name": "Core Platform team",
+    "description": "",
+    "teamType": "MEMBER_INVITE",
+    "members": [
+      {
+        "accountId": "712020:510289cf-3e6c-4bf3-8731-a6e1591873e1",
+        "displayName": null,
+        "emailAddress": null
+      },
+      {
+        "accountId": "712020:b469f5c9-d5e8-403f-98d3-c7ce1fb53525",
+        "displayName": null,
+        "emailAddress": null
+      },
+      {
+        "accountId": "712020:c383e501-6dbc-4ef1-90e1-0daa42f0d9fb",
+        "displayName": null,
+        "emailAddress": null
+      }
+    ]
+  },
+  {
+    "id": "1dbb75a8-02c7-406b-ad8f-6889d3c12009",
+    "name": "AI team",
+    "description": "",
+    "teamType": "MEMBER_INVITE",
+    "members": [
+      {
+        "accountId": "5aa5734aafb80a211be4a6a8",
+        "displayName": null,
+        "emailAddress": null
+      },
+      {
+        "accountId": "70121:596e9cdf-b231-4f68-90df-2ea726454d16",
+        "displayName": null,
+        "emailAddress": null
+      },
+      {
+        "accountId": "712020:510289cf-3e6c-4bf3-8731-a6e1591873e1",
+        "displayName": null,
+        "emailAddress": null
+      },
+      {
+        "accountId": "712020:d9eeac49-262c-4a30-ad77-78f31a00c125",
+        "displayName": null,
+        "emailAddress": null
+      }
+    ]
+  }
+]

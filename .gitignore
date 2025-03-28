@@ -6,6 +6,7 @@ generated_data/
 *.json
 !package.json
 !package-lock.json
+!user_data/*.json
 
 # Python
 __pycache__/
