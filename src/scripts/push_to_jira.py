@@ -91,7 +91,7 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
             issue_fields['assignee'] = {'accountId': ticket_data['assignee_id']}
             # Infer team ID from assignee
             team_id = get_team_id_from_assignee(ticket_data['assignee_id'], teams_data)
-            if team_id:
+            if team_id and ticket_data['type'] != 'Sub-task':  # Skip team assignment for subtasks
                 # The custom field ID for team varies by JIRA instance
                 # This is typically 'customfield_10001' but may need to be configured
                 team_field = os.getenv('JIRA_TEAM_FIELD', 'customfield_10001')
