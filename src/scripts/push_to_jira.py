@@ -11,6 +11,14 @@ def load_data(file_path: str) -> Dict[str, Any]:
     with open(file_path, 'r') as f:
         return json.load(f)
 
+def get_team_id_from_assignee(assignee_id: str, teams_data: Dict[str, Any]) -> str:
+    """Get team ID from assignee's team information."""
+    for team in teams_data:
+        for member in team.get('members', []):
+            if member.get('accountId') == assignee_id:
+                return team['id']
+    return None
+
 def create_fix_version(jira: JIRA, version_data: Dict[str, Any]) -> str:
     """Create a fix version in JIRA."""
     try:
@@ -56,7 +64,7 @@ def create_sprint(jira: JIRA, sprint_data: Dict[str, Any]) -> str:
         print(f"Error creating sprint {sprint_data['name']}: {str(e)}")
         raise
 
-def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_mapping, created_versions, fix_versions_data):
+def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_mapping, created_versions, fix_versions_data, teams_data):
     """Create a JIRA ticket with proper relationships"""
     try:
         # Map ticket types to JIRA issue type names
@@ -81,18 +89,18 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
             issue_fields['reporter'] = {'accountId': ticket_data['reporter_id']}
         if ticket_data.get('assignee_id'):
             issue_fields['assignee'] = {'accountId': ticket_data['assignee_id']}
-
-        # Add team information for all ticket types except subtasks
-        if ticket_data['type'] != 'Sub-task' and ticket_data.get('team_id'):
-            # The custom field ID for team varies by JIRA instance
-            # This is typically 'customfield_10001' but may need to be configured
-            team_field = os.getenv('JIRA_TEAM_FIELD', 'customfield_10001')
-            print(f"Setting team field for {ticket_data['type']} {ticket_data['id']}")
-            print(f"Team field name: {team_field}")
-            print(f"Team ID: {ticket_data['team_id']}")
-            # Set the team ID directly as per Atlassian Teams API documentation
-            issue_fields[team_field] = ticket_data['team_id']
-            print(f"Updated issue fields: {json.dumps(issue_fields, indent=2)}")
+            # Infer team ID from assignee
+            team_id = get_team_id_from_assignee(ticket_data['assignee_id'], teams_data)
+            if team_id:
+                # The custom field ID for team varies by JIRA instance
+                # This is typically 'customfield_10001' but may need to be configured
+                team_field = os.getenv('JIRA_TEAM_FIELD', 'customfield_10001')
+                print(f"Setting team field for {ticket_data['type']} {ticket_data['id']}")
+                print(f"Team field name: {team_field}")
+                print(f"Team ID: {team_id}")
+                # Set the team ID directly as per Atlassian Teams API documentation
+                issue_fields[team_field] = team_id
+                print(f"Updated issue fields: {json.dumps(issue_fields, indent=2)}")
 
         # Add story points if available (excluding Epics)
         if 'story_points' in ticket_data and ticket_data['type'] != 'Epic':
@@ -194,6 +202,7 @@ def main():
     tickets = load_data(os.path.join(args.input_dir, "tickets.json"))
     sprints = load_data(os.path.join(args.input_dir, "sprints.json"))
     fix_versions = load_data(os.path.join(args.input_dir, "fix_versions.json"))
+    teams_data = load_data("user_data/jira_teams_20250328_104736.json")
     
     # Create fix versions first
     created_versions = {}
@@ -220,7 +229,8 @@ def main():
         if ticket_data["type"] == "Epic":
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints, created_versions, fix_versions)
+                                            created_tickets, created_sprints, created_versions, fix_versions,
+                                            teams_data)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created Epic {jira_key} from {ticket_data['id']}")
@@ -233,7 +243,8 @@ def main():
         if ticket_data["type"] in ["Story", "Task"]:
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints, created_versions, fix_versions)
+                                            created_tickets, created_sprints, created_versions, fix_versions,
+                                            teams_data)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created {ticket_data['type']} {jira_key} from {ticket_data['id']}")
@@ -246,40 +257,34 @@ def main():
         if ticket_data["type"] == "Bug":
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints, created_versions, fix_versions)
+                                            created_tickets, created_sprints, created_versions, fix_versions,
+                                            teams_data)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
                     print(f"Created Bug {jira_key} from {ticket_data['id']}")
             except Exception as e:
-                print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
+                print(f"Error creating Bug {ticket_data['id']}: {str(e)}")
     
-    # Finally, create all Subtask tickets
+    # Process Subtask tickets
     print("\nProcessing Subtask tickets...")
     for ticket_id, ticket_data in tickets.items():
         if ticket_data["type"] == "Sub-task":
-            print(f"Found subtask {ticket_data['id']} with parent {ticket_data.get('parent_ticket')}")
             try:
                 jira_key = create_jira_ticket(ticket_data, jira, os.getenv("JIRA_PROJECT_KEY"), 
-                                            created_tickets, created_sprints, created_versions, fix_versions)
+                                            created_tickets, created_sprints, created_versions, fix_versions,
+                                            teams_data)
                 if jira_key:
                     created_tickets[ticket_data["id"]] = jira_key
-                    print(f"Created Subtask {jira_key} from {ticket_data['id']}")
-                else:
-                    print(f"Failed to create subtask {ticket_data['id']}")
+                    print(f"Created Sub-task {jira_key} from {ticket_data['id']}")
             except Exception as e:
-                print(f"Error creating ticket {ticket_data['id']}: {str(e)}")
+                print(f"Error creating Sub-task {ticket_data['id']}: {str(e)}")
     
-    # Save mapping of generated tickets to JIRA tickets
-    mapping_file = os.path.join(args.input_dir, "jira_mapping.json")
-    with open(mapping_file, "w") as f:
-        json.dump({
-            "tickets": created_tickets,
-            "sprints": created_sprints,
-            "fix_versions": created_versions
-        }, f, indent=2)
+    # Save the mapping of generated IDs to JIRA keys
+    with open(os.path.join(args.input_dir, "jira_mapping.json"), 'w') as f:
+        json.dump(created_tickets, f, indent=2)
     
     print(f"\nSuccessfully created {len(created_tickets)} tickets, {len(created_sprints)} sprints, and {len(created_versions)} fix versions in JIRA")
-    print(f"Mapping saved to {mapping_file}")
+    print(f"Mapping saved to {os.path.join(args.input_dir, 'jira_mapping.json')}")
 
 if __name__ == "__main__":
     main() 
