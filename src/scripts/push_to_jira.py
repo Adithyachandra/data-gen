@@ -76,6 +76,12 @@ def create_jira_ticket(ticket_data, jira, project_key, ticket_mapping, sprint_ma
             'issuetype': {'name': issue_type_map[ticket_data['type']]}
         }
 
+        # Add reporter and assignee
+        if ticket_data.get('reporter_id'):
+            issue_fields['reporter'] = {'accountId': ticket_data['reporter_id']}
+        if ticket_data.get('assignee_id'):
+            issue_fields['assignee'] = {'accountId': ticket_data['assignee_id']}
+
         # Add story points if available (excluding Epics)
         if 'story_points' in ticket_data and ticket_data['type'] != 'Epic':
             # The custom field ID for story points varies by JIRA instance
